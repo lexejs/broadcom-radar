@@ -46,8 +46,8 @@ jobs:
         with:
           name: broadcom-radar-firmware
           path: |
-            dist/BroadcomRadar-CardputerADV.bin
-            dist/BroadcomRadar-CardputerADV.bin.json
-            dist/BroadcomRadar-Cardputer.bin
-            dist/BroadcomRadar-Cardputer.bin.json
+            dist/RadarADV-*.bin
+            dist/RadarADV-*.bin.json
+            dist/Radar-*.bin
+            dist/Radar-*.bin.json
           if-no-files-found: error

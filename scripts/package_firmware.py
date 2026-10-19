@@ -3,6 +3,7 @@ Import("env")
 from pathlib import Path
 import hashlib
 import json
+import re
 import shutil
 
 env.Append(LINKFLAGS=["-flto"])
@@ -14,9 +15,13 @@ def package(source, target, env):
         raise RuntimeError("Expected an ESP application image")
     if binary.stat().st_size > 0x180000:
         raise RuntimeError("Application exceeds the conservative 1.5 MiB build guard")
-    output = Path(env.subst("$PROJECT_DIR")) / "dist"
+    project = Path(env.subst("$PROJECT_DIR"))
+    version = re.search(r'kFirmwareVersion\s*=\s*"([^"]+)"',
+                        (project / "include" / "RadarTypes.h").read_text()).group(1)
+    output = project / "dist"
     output.mkdir(exist_ok=True)
-    name = "BroadcomRadar-CardputerADV.bin" if env["PIOENV"] == "cardputer_adv" else "BroadcomRadar-Cardputer.bin"
+    variant = "RadarADV" if env["PIOENV"] == "cardputer_adv" else "Radar"
+    name = f"{variant}-{version}.bin"
     destination = output / name
     shutil.copyfile(binary, destination)
     metadata = {"file": name, "bytes": destination.stat().st_size,

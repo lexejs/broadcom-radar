@@ -10,10 +10,10 @@ Download application images and their SHA-256 manifests from the [v1.0.1 release
 
 | Hardware | Application image | Size |
 | --- | --- | --- |
-| Cardputer ADV (Stamp-S3A) | [BroadcomRadar-CardputerADV.bin](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.1/BroadcomRadar-CardputerADV.bin) | 1,004,032 bytes |
-| Original Cardputer (Stamp-S3) | [BroadcomRadar-Cardputer.bin](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.1/BroadcomRadar-Cardputer.bin) | 1,004,112 bytes |
+| Cardputer ADV (Stamp-S3A) | [RadarADV-1.0.1.bin](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.1/RadarADV-1.0.1.bin) | 1,004,224 bytes |
+| Original Cardputer (Stamp-S3) | [Radar-1.0.1.bin](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.1/Radar-1.0.1.bin) | 1,004,320 bytes |
 
-The adjacent `.bin.json` files contain exact sizes, SHA-256 hashes and required app partition sizes rounded to 64 KiB. These are **application-only** ESP32-S3 images, starting with `0xE9`. They contain no bootloader, partition table, filesystem image or configuration. Use the binary for your hardware: the ADV build explicitly selects the TCA8418 keyboard reader; the original selects the GPIO matrix reader.
+Filenames include the firmware version from `include/RadarTypes.h`. The adjacent `.bin.json` files contain exact sizes, SHA-256 hashes and required app partition sizes rounded to 64 KiB. These are **application-only** ESP32-S3 images, starting with `0xE9`. They contain no bootloader, partition table, filesystem image or configuration. Use the binary for your hardware: the ADV build explicitly selects the TCA8418 keyboard reader; the original selects the GPIO matrix reader.
 
 | Validation | Status |
 | --- | --- |
@@ -27,7 +27,7 @@ Both images require an existing OTA app slot of at least **1,048,576 bytes** aft
 
 1. Keep the existing Launcher installed. Before replacing an app, save its original `.bin`, back up that app and its data using the installed Launcher's backup facilities, and preserve `/config.conf` and `/bkp` on the SD card. Keep an off-card copy of important backups. Check the existing boot-to-Launcher/recovery setting before installation.
 2. Open **PMan** or the installed version's partition list. Identify an existing OTA app slot large enough for the `required_aligned_app_partition_bytes` in the selected `.bin.json`. The build enforces a conservative 1.5 MiB maximum, but this is a build guard, not a claim about your device's current free space. The resident Launcher partition must not be selected.
-3. Copy the matching downloaded `.bin` to the microSD card, for example `/firmware/BroadcomRadar-CardputerADV.bin`. FAT32 on an MBR SDHC card is a conservative choice; the installed Launcher may also support other formats. Insert the card.
+3. Copy the matching downloaded `.bin` to the microSD card, for example `/firmware/RadarADV-1.0.1.bin`. FAT32 on an MBR SDHC card is a conservative choice; the installed Launcher may also support other formats. Insert the card.
 4. Enter Launcher, open **SD**, select the `.bin`, then the install action. Choose the existing compatible OTA app slot, with the understanding that this replaces its previous app. Menu wording varies by Launcher version. Decline partition resizing, removal, compaction, formatting and filesystem installation if offered. This application needs no data partition. Stop if an existing slot does not fit.
 5. Start the installed app. The initial screen should show `BROADCOM RADAR`, `RUNNING`, and a changing channel. Reception is passive; wait through several channel sweeps.
 
@@ -36,7 +36,7 @@ Both images require an existing OTA app slot of at least **1,048,576 bytes** aft
 If you already have a raw partition-table export or a CSV describing the actual installed table, this read-only check verifies that the image fits an existing OTA slot:
 
 ```sh
-python3 scripts/check_launcher_partition.py dist/BroadcomRadar-CardputerADV.bin /path/to/actual-partitions.bin --label app1
+python3 scripts/check_launcher_partition.py dist/RadarADV-1.0.1.bin /path/to/actual-partitions.bin --label app1
 ```
 
 Use the real OTA partition label. This script does not read or write flash, resize partitions or install anything. Without a real table, only image-format and build-limit checks are possible. Current upstream Launcher uses dynamic partitions; an 8 MB flash chip alone does not establish the available app slot size.
