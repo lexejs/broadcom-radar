@@ -58,7 +58,17 @@ void loop() {
         pcap.add(frame);
         if (radar::parseAdvertisement(frame.bytes, frame.length, frame.rssi, frame.channel, frame.timestampUs, observation)) {
             if (observation.malformed) ++malformed;
-            store.observe(observation);
+            const auto* ap = store.observe(observation);
+            auto stats = scanner.stats();
+            if (exporter.needsDetection(observation, ap, stats.nowUs)) {
+                const bool running = stats.running;
+                if (running && !scanner.setRunning(false)) continue;
+                stats = scanner.stats();
+                stats.rejected = rejected; stats.malformed = malformed; stats.storeDrops = store.dropped();
+                exporter.saveDetection(observation, ap, frame, stats, hardware);
+                if (running) scanner.setRunning(true);
+                ui.notify(exporter.message());
+            }
         } else ++rejected;
     }
     ui.tick(store, scanner, exporter, pcap, rejected, malformed, hardware);

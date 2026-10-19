@@ -3,6 +3,14 @@
 #include <cstdio>
 #include <cstring>
 namespace radar {
+namespace {
+uint8_t identityFields(const WpsIdentity& identity) {
+    return (identity.manufacturer.length ? 1 : 0) | (identity.modelName.length ? 2 : 0) |
+           (identity.modelNumber.length ? 4 : 0) | (identity.deviceName.length ? 8 : 0) |
+           (identity.serialNumber.length ? 16 : 0) | (identity.uuidE.length ? 32 : 0) |
+           (identity.uuidR.length ? 64 : 0);
+}
+}
 bool Exporter::FileSink::write(const uint8_t* data, size_t size) {
     while (size) {
         size_t n = sizeof(buffer_) - used_;
@@ -30,7 +38,8 @@ bool Exporter::mount() {
     return available_;
 }
 void Exporter::filename(char* path, size_t size, const char* ext, bool partial) const {
-    std::snprintf(path, size, "/broadcom-radar/scan-%03u.%s%s", sequence_, ext, partial ? ".part" : "");
+    std::snprintf(path, size, "/broadcom-radar/%s-%03u.%s%s", detection_ ? "brcm" : "scan",
+                  detection_ ? detectionSequence_ : sequence_, ext, partial ? ".part" : "");
 }
 bool Exporter::open(const char* ext) {
     char path[80]; filename(path, sizeof(path), ext, true);
@@ -40,6 +49,9 @@ bool Exporter::open(const char* ext) {
 bool Exporter::finishFile(const char* ext) {
     file_.flush(); const bool good = file_.getWriteError() == 0; file_.close();
     if (!good) return false;
+    return publishFile(ext);
+}
+bool Exporter::publishFile(const char* ext) {
     char src[80], dst[80]; filename(src, sizeof(src), ext, true); filename(dst, sizeof(dst), ext, false);
     return !SD.exists(dst) && SD.rename(src, dst);
 }
@@ -49,22 +61,88 @@ void Exporter::fail(const char* reason) {
 }
 bool Exporter::start(const AccessPointStore& store, const ScanStats& stats, const PcapRing& ring, const char* hardware) {
     if (busy()) return false;
+    detection_ = false;
     if (!available_ && !mount()) return false;
-    // Never overwrite a prior export, including interrupted .part files.
-    for (; sequence_ < 9999;) {
-        ++sequence_; bool exists = false; char path[80];
-        for (const char* ext : {"json", "csv", "pcap"}) for (bool partial : {false, true}) {
-            filename(path, sizeof(path), ext, partial); exists |= SD.exists(path);
-        }
-        if (!exists) break;
-    }
-    if (sequence_ >= 9999) { fail("Export names exhausted"); return false; }
+    if (!nextSequence()) return false;
     store_ = &store; ring_ = &ring; index_ = 0;
     if (!open("json")) { fail("SD open failed"); return false; }
     FileSink sink(file_);
     if (!writeJsonHeader(sink, stats, hardware, RADAR_COUNTRY, ring) || !sink.flush()) { fail("SD write failed"); return false; }
     phase_ = Phase::Json;
     std::snprintf(message_, sizeof(message_), "Export scan-%03u (capture paused)", sequence_);
+    return true;
+}
+bool Exporter::nextSequence() {
+    auto& sequence = detection_ ? detectionSequence_ : sequence_;
+    // Never overwrite a prior export, including interrupted .part files.
+    while (sequence < 9999) {
+        ++sequence; bool exists = false; char path[80];
+        for (const char* ext : {"json", "csv", "pcap"}) for (bool partial : {false, true}) {
+            filename(path, sizeof(path), ext, partial); exists |= SD.exists(path);
+        }
+        if (!exists) return true;
+    }
+    fail("Export names exhausted"); return false;
+}
+bool Exporter::needsDetection(const Observation& observation, const AccessPoint* aggregate, uint64_t nowUs) const {
+    if (busy() || observation.malformed || nowUs < retryAfterUs_) return false;
+    const auto& info = aggregate ? aggregate->info : observation;
+    if (!info.evidence) return false;
+    const uint8_t fields = identityFields(info.wps);
+    for (size_t i = 0; i < savedCount_; ++i) if (!std::memcmp(saved_[i].bssid, info.bssid, 6))
+        return (info.evidence & ~saved_[i].evidence) || (fields & ~saved_[i].fields);
+    return true;
+}
+bool Exporter::saveDetection(const Observation& observation, const AccessPoint* aggregate, const Frame& frame,
+                             const ScanStats& stats, const char* hardware) {
+    if (!needsDetection(observation, aggregate, stats.nowUs)) return false;
+    // Retry only on a later received advertisement, at most once every five seconds after an SD error.
+    retryAfterUs_ = stats.nowUs + 5000000ULL;
+    detection_ = true;
+    if (!available_ && !mount()) return false;
+    if (!nextSequence()) return false;
+    AccessPoint single;
+    if (!aggregate) {
+        single.info = observation; single.firstSeenUs = single.lastSeenUs = observation.seenUs;
+        single.advertisements = single.completeAdvertisements = 1; single.maxRssi = observation.rssi;
+        single.beacons = observation.subtype == 8; single.probeResponses = observation.subtype == 5;
+        if (observation.captureChannel >= 1 && observation.captureChannel <= 14)
+            single.captureChannels = 1 << (observation.captureChannel - 1);
+        aggregate = &single;
+    }
+    bool good = open("json");
+    if (good) {
+        FileSink sink(file_);
+        good = writeDetectionJsonHeader(sink, stats, hardware, RADAR_COUNTRY) &&
+               writeJsonAp(sink, *aggregate, true) && writeJsonFooter(sink) && sink.flush();
+    }
+    file_.flush(); good = good && file_.getWriteError() == 0; file_.close();
+    if (good) good = open("csv");
+    if (good) {
+        FileSink sink(file_); good = writeCsvHeader(sink) && writeCsvAp(sink, *aggregate) && sink.flush();
+    }
+    file_.flush(); good = good && file_.getWriteError() == 0; file_.close();
+    if (good) good = open("pcap");
+    if (good) {
+        FileSink sink(file_); good = writePcapHeader(sink) && writePcapFrame(sink, frame) && sink.flush();
+    }
+    file_.flush(); good = good && file_.getWriteError() == 0; file_.close();
+    // Publish JSON last: a final detection JSON means all three files were completed.
+    if (!good || !publishFile("pcap") || !publishFile("csv") || !publishFile("json")) {
+        fail("BRCM save failed; retry later"); return false;
+    }
+    size_t index = 0;
+    while (index < savedCount_ && std::memcmp(saved_[index].bssid, aggregate->info.bssid, 6)) ++index;
+    if (index == savedCount_) {
+        index = savedNext_; savedNext_ = (savedNext_ + 1) % kMaxAps;
+        if (savedCount_ < kMaxAps) ++savedCount_;
+        saved_[index] = SavedDetection{};
+        std::memcpy(saved_[index].bssid, aggregate->info.bssid, 6);
+    }
+    saved_[index].evidence |= aggregate->info.evidence;
+    saved_[index].fields |= identityFields(aggregate->info.wps);
+    retryAfterUs_ = 0;
+    std::snprintf(message_, sizeof(message_), "Saved brcm-%03u + PCAP", detectionSequence_);
     return true;
 }
 void Exporter::tick() {

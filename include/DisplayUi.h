@@ -6,6 +6,7 @@ namespace radar {
 class DisplayUi {
 public:
     bool begin();
+    void notify(const char* message);
     void tick(AccessPointStore& store, WifiScanner& scanner, Exporter& exporter,
               PcapRing& ring, uint32_t& rejected, uint32_t& malformed, const char* hardware);
 private:

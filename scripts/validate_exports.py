@@ -40,3 +40,21 @@ while offset < len(data):
     count += 1
 assert offset == len(data) and count == 16
 print("PASS: JSON/CSV round trip and 16 raw 802.11 PCAP records, DLT 105")
+
+report = json.loads((root / "brcm-001.json").read_text())
+assert report["capture_reason"] == "broadcom_detection"
+assert report["pcap_scope"] == "triggering_advertisement"
+assert report["pcap_enabled"] and report["pcap_frames"] == 1
+assert len(report["access_points"]) == 1
+ap = report["access_points"][0]
+assert ap["status"] == "BROADCOM_SIGNATURE" and ap["ssid"] == "Test"
+rows = list(csv.DictReader((root / "brcm-001.csv").open(newline="")))
+assert len(rows) == 1 and rows[0]["bssid"] == ap["bssid"]
+data = (root / "brcm-001.pcap").read_bytes()
+assert struct.unpack_from("<IHHIIII", data) == (0xA1B2C3D4, 2, 4, 0, 0, 2304, 105)
+seconds, micros, captured, original = struct.unpack_from("<IIII", data, 24)
+assert seconds == 2 and micros == 0 and captured == original == len(data) - 40
+frame = data[40:]
+assert frame[16:22].hex() == ap["bssid"].replace(":", "").lower()
+assert b"\xdd\x09\x00\x10\x18\x02" in frame
+print("PASS: automatic BRCM JSON/CSV and matching single-frame PCAP with manual capture disabled")

@@ -211,6 +211,102 @@ void exportTests(const char* output) {
     AccessPointStore empty; CHECK(exporter.start(empty,stats,ring,"Cardputer ADV")); while(exporter.busy()) exporter.tick();
     CHECK(exporter.available());
 }
+void detectionTests(const char* output) {
+    mock::files.clear(); mock::sdPresent=true;
+    Exporter exporter; AccessPointStore store; PcapRing ring;
+    ScanStats stats; stats.nowUs=2000000; stats.received=1;
+    auto bytes=beacon(); proprietary(bytes);
+    auto observation=parse(bytes); const auto* ap=store.observe(observation);
+    Frame frame;
+    auto setFrame=[&](const Data& data) {
+        frame.length=data.size(); frame.timestampUs=stats.nowUs;
+        std::memcpy(frame.bytes,data.data(),data.size());
+    };
+    setFrame(bytes);
+    CHECK(exporter.needsDetection(observation,ap,stats.nowUs));
+    CHECK(exporter.saveDetection(observation,ap,frame,stats,"Cardputer ADV"));
+    CHECK(!ring.enabled() && ring.size()==0);
+    CHECK(!exporter.busy() && exporter.available());
+    for(const char* extension : {"json","csv","pcap"}) {
+        std::string key=std::string("/broadcom-radar/brcm-001.")+extension;
+        CHECK(mock::files.count(key)); CHECK(!mock::files.count(key+".part"));
+        if(output) {
+            const auto& data=mock::files.at(key);
+            std::ofstream file(std::string(output)+"/brcm-001."+extension,std::ios::binary);
+            file.write(reinterpret_cast<const char*>(data.data()),data.size()); CHECK(bool(file));
+        }
+    }
+    const auto& capture=mock::files.at("/broadcom-radar/brcm-001.pcap");
+    CHECK(capture.size()==40+bytes.size());
+    CHECK(!std::memcmp(capture.data()+40,bytes.data(),bytes.size()));
+    CHECK(!exporter.needsDetection(observation,ap,stats.nowUs));
+    auto count=mock::files.size();
+    CHECK(!exporter.saveDetection(observation,ap,frame,stats,"Cardputer ADV")); CHECK(mock::files.size()==count);
+    // A later probe response can supply identity even without repeating the signature.
+    auto richer=ordinaryWps(); richer[0]=0x50; observation=parse(richer); ap=store.observe(observation); setFrame(richer);
+    CHECK(!observation.evidence && exporter.needsDetection(observation,ap,stats.nowUs));
+    CHECK(exporter.saveDetection(observation,ap,frame,stats,"Cardputer ADV"));
+    CHECK(mock::files.count("/broadcom-radar/brcm-002.json"));
+    CHECK(!exporter.needsDetection(observation,ap,stats.nowUs));
+    auto uuid=fixedUuid(); observation=parse(uuid); ap=store.observe(observation); setFrame(uuid);
+    CHECK(exporter.saveDetection(observation,ap,frame,stats,"Cardputer ADV"));
+    CHECK(mock::files.count("/broadcom-radar/brcm-003.json"));
+    auto malformedFrame=bytes; malformedFrame.push_back(221); observation=parse(malformedFrame); ap=store.observe(observation);
+    CHECK(!exporter.needsDetection(observation,ap,stats.nowUs));
+    CHECK(!exporter.needsDetection(parse(beacon()),nullptr,stats.nowUs));
+    CHECK(!exporter.needsDetection(parse(ordinaryWps()),nullptr,stats.nowUs));
+    // Separate WPS advertisements can jointly establish an identity-default signature.
+    AccessPointStore splitStore; Data first; tlv(first,0x1021,text("Broadcom")); auto split=beacon({'S'},2); wps(split,first);
+    observation=parse(split); ap=splitStore.observe(observation);
+    CHECK(!exporter.needsDetection(observation,ap,stats.nowUs));
+    Data second; tlv(second,0x1024,text("1234")); split=beacon({'S'},2); wps(split,second);
+    observation=parse(split); ap=splitStore.observe(observation); setFrame(split);
+    CHECK(!observation.evidence && ap->info.evidence==IdentityDefaults);
+    CHECK(exporter.saveDetection(observation,ap,frame,stats,"Cardputer ADV"));
+    // Automatic export never interrupts an ongoing manual export or modifies its capture ring.
+    ring.enable(true); ring.add(frame);
+    CHECK(exporter.start(store,stats,ring,"Cardputer ADV"));
+    observation=parse(defaults()); ap=store.observe(observation); setFrame(defaults());
+    CHECK(!exporter.saveDetection(observation,ap,frame,stats,"Cardputer ADV"));
+    while(exporter.busy()) exporter.tick();
+    CHECK(mock::files.count("/broadcom-radar/scan-001.json"));
+    CHECK(ring.enabled() && ring.size()==1);
+    CHECK(exporter.saveDetection(observation,ap,frame,stats,"Cardputer ADV"));
+    CHECK(ring.enabled() && ring.size()==1);
+    // Even a new BRCM BSSID outside a full display table is archived directly.
+    store.clear();
+    for(size_t i=1;i<=kMaxAps;++i) CHECK(store.observe(parse(beacon({'x'},i))));
+    bytes=beacon({'F'},200); proprietary(bytes); observation=parse(bytes); ap=store.observe(observation); setFrame(bytes);
+    CHECK(!ap && store.size()==kMaxAps && store.dropped()==1);
+    CHECK(exporter.saveDetection(observation,ap,frame,stats,"Cardputer ADV"));
+    CHECK(store.size()==kMaxAps);
+    // SD absence throttles retries without marking the BSSID as saved.
+    Exporter retry; mock::files.clear(); mock::sdPresent=false;
+    CHECK(!retry.saveDetection(observation,nullptr,frame,stats,"Cardputer ADV"));
+    CHECK(!retry.needsDetection(observation,nullptr,stats.nowUs+4999999));
+    mock::sdPresent=true; stats.nowUs+=5000000;
+    mock::files["/broadcom-radar/brcm-001.pcap.part"]={1,2,3};
+    CHECK(retry.saveDetection(observation,nullptr,frame,stats,"Cardputer ADV"));
+    CHECK(mock::files.count("/broadcom-radar/brcm-002.json"));
+    CHECK(mock::files.at("/broadcom-radar/brcm-001.pcap.part")==Data({1,2,3}));
+    // A PCAP write failure must not publish JSON or suppress a future retry.
+    Exporter failed; mock::files.clear(); mock::failWritePath="/broadcom-radar/brcm-001.pcap.part";
+    CHECK(!failed.saveDetection(observation,nullptr,frame,stats,"Cardputer ADV"));
+    CHECK(!mock::files.count("/broadcom-radar/brcm-001.json"));
+    CHECK(mock::files.count("/broadcom-radar/brcm-001.json.part"));
+    CHECK(!failed.needsDetection(observation,nullptr,stats.nowUs));
+    mock::failWritePath.clear(); stats.nowUs+=5000000;
+    CHECK(failed.saveDetection(observation,nullptr,frame,stats,"Cardputer ADV"));
+    CHECK(mock::files.count("/broadcom-radar/brcm-002.json"));
+    // A failure after PCAP publication still leaves no final JSON completion marker.
+    Exporter rename; mock::files.clear(); mock::failRenamePath="/broadcom-radar/brcm-001.csv";
+    CHECK(!rename.saveDetection(observation,nullptr,frame,stats,"Cardputer ADV"));
+    CHECK(mock::files.count("/broadcom-radar/brcm-001.pcap"));
+    CHECK(!mock::files.count("/broadcom-radar/brcm-001.json"));
+    mock::failRenamePath.clear(); stats.nowUs+=5000000;
+    CHECK(rename.saveDetection(observation,nullptr,frame,stats,"Cardputer ADV"));
+    CHECK(mock::files.count("/broadcom-radar/brcm-002.json"));
+}
 void corruptionTests() {
     std::mt19937 random(0x4252434d); Observation observation;
     for(size_t iteration=0;iteration<50000;++iteration) {
@@ -240,6 +336,10 @@ void uiTests() {
     CHECK(M5Cardputer.Display.lines[3].find("dBm")!=std::string::npos);
     CHECK(M5Cardputer.Display.backgrounds[3]==TFT_NAVY);
     CHECK(M5Cardputer.Display.lines[7].empty());
+    CHECK(M5Cardputer.Display.lines[8]=="S:pause M:channel H:help");
+    ui.notify("Saved brcm-001 + PCAP"); tick();
+    CHECK(M5Cardputer.Display.lines[8]=="Saved brcm-001 + PCAP");
+    mock::nowUs+=5000000; tick();
     CHECK(M5Cardputer.Display.lines[8]=="S:pause M:channel H:help");
     const auto initialPushes=M5Cardputer.Display.pushes;
     tick(); tick(); CHECK(M5Cardputer.Display.pushes==initialPushes);
@@ -332,7 +432,8 @@ void uiSortingTests() {
 }
 int main(int argc,char** argv) {
     try {
-        parserTests(); storeTests(); scannerTests(); exportTests(argc>1?argv[1]:nullptr); uiTests(); uiSortingTests(); corruptionTests();
+        parserTests(); storeTests(); scannerTests(); exportTests(argc>1?argv[1]:nullptr);
+        detectionTests(argc>1?argv[1]:nullptr); uiTests(); uiSortingTests(); corruptionTests();
         std::cout << "PASS: " << checks << " checks; 50,000 deterministic corrupt frames\n";
     } catch(const std::exception& e) { std::cerr << "FAIL: " << e.what() << '\n'; return 1; }
 }

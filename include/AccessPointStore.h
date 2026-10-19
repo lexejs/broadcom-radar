@@ -3,7 +3,7 @@
 namespace radar {
 class AccessPointStore {
 public:
-    bool observe(const Observation& observation);
+    const AccessPoint* observe(const Observation& observation);
     void clear();
     size_t size() const { return size_; }
     const AccessPoint& at(size_t i) const { return aps_[i]; }

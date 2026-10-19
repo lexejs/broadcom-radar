@@ -48,8 +48,8 @@ bool u32(Sink& sink, uint32_t value) {
     uint8_t bytes[4] = {uint8_t(value), uint8_t(value >> 8), uint8_t(value >> 16), uint8_t(value >> 24)};
     return sink.write(bytes, 4);
 }
-}
-bool writeJsonHeader(Sink& sink, const ScanStats& s, const char* hardware, const char* country, const PcapRing& ring) {
+bool jsonHeader(Sink& sink, const ScanStats& s, const char* hardware, const char* country,
+                bool pcapEnabled, size_t pcapFrames, uint32_t pcapOverwritten, bool detection) {
     Writer w{sink};
     w.raw("{\"schema_version\":1,\"firmware_version\":"); w.str(kFirmwareVersion);
     w.raw(",\"hardware\":"); w.str(hardware); w.raw(",\"mode\":\"passive-only\",\"country\":"); w.str(country);
@@ -60,10 +60,18 @@ bool writeJsonHeader(Sink& sink, const ScanStats& s, const char* hardware, const
     w.fmt("\"rejected_frames\":%u,\"malformed_frames\":%u,\"store_dropped_observations\":%u,\"discarded_on_pause\":%u,",
           s.rejected, s.malformed, s.storeDrops, s.discardedOnPause);
     w.raw("\"listened_channels\":"); channels(w, s.listenedChannels);
-    w.fmt(",\"pcap_enabled\":%s,\"pcap_frames\":%u,\"pcap_overwritten\":%u,", ring.enabled() ? "true" : "false", unsigned(ring.size()), ring.overwritten());
+    w.fmt(",\"pcap_enabled\":%s,\"pcap_frames\":%u,\"pcap_overwritten\":%u,", pcapEnabled ? "true" : "false", unsigned(pcapFrames), pcapOverwritten);
+    if (detection) w.raw("\"capture_reason\":\"broadcom_detection\",\"pcap_scope\":\"triggering_advertisement\",");
     w.raw("\"limits\":{\"max_aps\":128,\"queue_depth\":12,\"max_frame_bytes\":2304,\"wps_bytes_per_frame\":1024,\"wps_text_bytes\":64,\"vendor_summaries_per_ap\":8,\"pcap_depth\":16},");
     w.raw("\"limitations\":[\"Passive fingerprints do not establish vulnerability or safety\",\"2.4 GHz only; one channel at a time; advertisements can be missed\",\"Export pauses capture; full store retains existing BSSIDs and drops new ones\",\"Malformed advertisements do not contribute identity or evidence\",\"OUI attribution is not implemented\",\"Binary strings use byte-wise JSON escapes; ssid_hex preserves exact bytes\",\"WPS text is bounded; vendor IEs are summaries, raw IEs require optional PCAP\",\"PCAP is a bounded recent snapshot with monotonic timestamps, without FCS or RadioTap\"],\"access_points\":[\n");
     return w.ok;
+}
+}
+bool writeJsonHeader(Sink& sink, const ScanStats& s, const char* hardware, const char* country, const PcapRing& ring) {
+    return jsonHeader(sink, s, hardware, country, ring.enabled(), ring.size(), ring.overwritten(), false);
+}
+bool writeDetectionJsonHeader(Sink& sink, const ScanStats& s, const char* hardware, const char* country) {
+    return jsonHeader(sink, s, hardware, country, true, 1, 0, true);
 }
 bool writeJsonAp(Sink& sink, const AccessPoint& ap, bool first) {
     Writer w{sink}; const auto& a = ap.info; char mac[18]; renderMac(a.bssid, mac, sizeof(mac));

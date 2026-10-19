@@ -150,6 +150,10 @@ void DisplayUi::draw(const AccessPointStore& store, const ScanStats& s, const Ex
     }
     firstDraw_ = false;
 }
+void DisplayUi::notify(const char* message) {
+    std::snprintf(notice_, sizeof(notice_), "%s", message);
+    noticeUntil_ = millis() + 5000; dirty_ = true;
+}
 void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& exporter,
                      PcapRing& ring, uint32_t& rejected, uint32_t& malformed, const char* hardware) {
     bool exporting = exporter.busy(); exporter.tick();

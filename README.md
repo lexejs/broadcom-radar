@@ -1,24 +1,24 @@
 # Broadcom Radar for M5Stack Cardputer
 
-Portable 2.4 GHz Broadcom Wi-Fi/WPS fingerprint detector for **M5Stack Cardputer ADV** and the **original Cardputer**, installed through M5Launcher. Firmware version: **1.0.3**.
+Portable 2.4 GHz Broadcom Wi-Fi/WPS fingerprint detector for **M5Stack Cardputer ADV** and the **original Cardputer**, installed through M5Launcher. Firmware version: **1.0.4**.
 
-Radar listens to Beacon and already present Probe Response frames, identifies three published Broadcom fingerprints, and shows the evidence on the device. It provides channel hopping or fixed-channel monitoring, a keyboard-driven interface and optional JSON/CSV/PCAP export to microSD. Passive fingerprints do not establish vulnerability, patch status or safety. The application uses no active scan, connection or packet-injection APIs.
+Radar listens to Beacon and already present Probe Response frames, identifies three published Broadcom fingerprints, and shows the evidence on the device. It provides channel hopping or fixed-channel monitoring, a keyboard-driven interface, automatic Broadcom JSON/CSV/PCAP archives and manual scan export to microSD. Passive fingerprints do not establish vulnerability, patch status or safety. The application uses no active scan, connection or packet-injection APIs.
 
 ## Ready-to-install files
 
-Download application images and their SHA-256 manifests from the [v1.0.3 release](https://github.com/lexejs/broadcom-radar/releases/tag/v1.0.3). Local builds generate the same filenames under `dist/`; generated files are excluded from source history.
+Local builds generate application images and their SHA-256 manifests under `dist/`; generated files are excluded from source history. Version 1.0.4 has not been published to GitHub.
 
 | Hardware | Application image | Size |
 | --- | --- | --- |
-| Cardputer ADV (Stamp-S3A) | [BRCM-RDR-1.0.3.bin](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.3/BRCM-RDR-1.0.3.bin) | 1,004,224 bytes |
-| Original Cardputer (Stamp-S3) | [BRCM-RDR-S3-1.0.3.bin](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.3/BRCM-RDR-S3-1.0.3.bin) | 1,004,320 bytes |
+| Cardputer ADV (Stamp-S3A) | `BRCM-RDR-1.0.4.bin` | 1,005,696 bytes |
+| Original Cardputer (Stamp-S3) | `BRCM-RDR-S3-1.0.4.bin` | 1,005,792 bytes |
 
 Filenames include the firmware version from `include/RadarTypes.h`. The adjacent `.bin.json` files contain exact sizes, SHA-256 hashes and required app partition sizes rounded to 64 KiB. These are **application-only** ESP32-S3 images, starting with `0xE9`. They contain no bootloader, partition table, filesystem image or configuration. Use the binary for your hardware: the ADV build explicitly selects the TCA8418 keyboard reader; the original selects the GPIO matrix reader.
 
 | Validation | Status |
 | --- | --- |
-| Both firmware builds, 95,188 host checks with ASan/UBSan, JSON/CSV and libpcap decoding | Passed on the development computer |
-| Cardputer ADV 1.0.1 basic operation and updated display | Reported working by the device owner on 18 October 2026; 1.0.3 still requires a device check |
+| Both firmware builds, 95,511 host assertions with ASan/UBSan (including 50,000 corrupt frames), manual/automatic JSON/CSV and libpcap decoding | Passed on the development computer |
+| Cardputer ADV 1.0.1 basic operation and updated display | Reported working by the device owner on 18 October 2026; 1.0.4 automatic SD archives still require a device check |
 | Original Cardputer, physical SD exports, detailed keyboard/battery checks, radio silence, recovery and long-running stability | Still require hardware acceptance checks |
 
 Both images require an existing OTA app slot of at least **1,048,576 bytes** after 64 KiB alignment. A read-only Launcher API check on the development ADV found a 1,114,112-byte slot on 18 October 2026. Other devices can have different partition layouts; check the actual slot before installation.
@@ -27,7 +27,7 @@ Both images require an existing OTA app slot of at least **1,048,576 bytes** aft
 
 1. Keep the existing Launcher installed. Before replacing an app, save its original `.bin`, back up that app and its data using the installed Launcher's backup facilities, and preserve `/config.conf` and `/bkp` on the SD card. Keep an off-card copy of important backups. Check the existing boot-to-Launcher/recovery setting before installation.
 2. Open **PMan** or the installed version's partition list. Identify an existing OTA app slot large enough for the `required_aligned_app_partition_bytes` in the selected `.bin.json`. The build enforces a conservative 1.5 MiB maximum, but this is a build guard, not a claim about your device's current free space. The resident Launcher partition must not be selected.
-3. Copy the matching downloaded `.bin` to the microSD card, for example `/firmware/BRCM-RDR-1.0.3.bin`. FAT32 on an MBR SDHC card is a conservative choice; the installed Launcher may also support other formats. Insert the card.
+3. Copy the matching `.bin` to the microSD card, for example `/firmware/BRCM-RDR-1.0.4.bin`. FAT32 on an MBR SDHC card is a conservative choice; the installed Launcher may also support other formats. Insert the card.
 4. Enter Launcher, open **SD**, select the `.bin`, then the install action. Choose the existing compatible OTA app slot, with the understanding that this replaces its previous app. Menu wording varies by Launcher version. Decline partition resizing, removal, compaction, formatting and filesystem installation if offered. This application needs no data partition. Stop if an existing slot does not fit.
 5. Start the installed app. The initial screen should show `BROADCOM RADAR`, `RUNNING`, and a changing channel. Reception is passive; wait through several channel sweeps.
 
@@ -36,7 +36,7 @@ Both images require an existing OTA app slot of at least **1,048,576 bytes** aft
 If you already have a raw partition-table export or a CSV describing the actual installed table, this read-only check verifies that the image fits an existing OTA slot:
 
 ```sh
-python3 scripts/check_launcher_partition.py dist/BRCM-RDR-1.0.3.bin /path/to/actual-partitions.bin --label app1
+python3 scripts/check_launcher_partition.py dist/BRCM-RDR-1.0.4.bin /path/to/actual-partitions.bin --label app1
 ```
 
 Use the real OTA partition label. This script does not read or write flash, resize partitions or install anything. Without a real table, only image-format and build-limit checks are possible. Current upstream Launcher uses dynamic partitions; an 8 MB flash chip alone does not establish the available app slot size.
@@ -95,17 +95,21 @@ No result establishes vulnerability, patch status or safety. A proprietary IE ma
 
 ## Export
 
+Broadcom detections are **saved automatically**, without pressing E or enabling P: `/broadcom-radar/brcm-001.json`, `.csv` and `.pcap` contain one detected BSSID and the raw advertisement that triggered that save. Capture briefly pauses during SD writes and then resumes. A later advertisement creates a new numbered archive only if it adds a Broadcom evidence bit or fills a previously empty WPS identity/UUID field. Repeated advertisements do not write to SD. Deduplication retains the latest 128 distinct saved BSSIDs in RAM, survives R and resets on reboot; older evicted entries can be saved again. An immediately recognizable Broadcom advertisement is archived even when the 128-AP display table is full.
+
+Automatic PCAP contains **one triggering advertisement**, independent of the manual 16-frame ring. The JSON/CSV identity is cumulative for APs in the table, so this one frame need not contain every previously observed field or evidence bit. JSON records `capture_reason: broadcom_detection` and `pcap_scope: triggering_advertisement`. All three files are written as `.part` first; JSON is published last as the completion marker. Errors leave partial files, keep capture usable and permit another attempt on a received Broadcom advertisement after five seconds. There is no pending-frame queue for detections seen while SD is unavailable.
+
 **E** creates `/broadcom-radar/scan-001.json` and `.csv`, then advances to an unused number. Existing final files and interrupted `.part` files are never overwritten. Writes use a 512-byte buffer and one AP or PCAP record per loop iteration. Each completed file is renamed from `.part`; SD errors keep partial files and leave capture usable. A JSON file may finish before a later CSV/PCAP write fails, so a complete set is indicated by all requested final filenames plus the `Saved` message.
 
 JSON includes schema/firmware/hardware, `passive-only`, monotonic timestamps, country, channel mode, channels listened to, receive/drop/malformed counters, bounds, limitations and all AP records. AP records contain BSSID, raw SSID hex, display string, capability flags, WPS fields/UUIDs, individual evidence with source descriptions, status, latest/maximum RSSI, observed channels and advertisement counts.
 
 JSON strings preserve byte values with `\u00XX` escapes; they are not a UTF-8 interpretation of binary SSIDs. `ssid_hex` is authoritative for original bytes. CSV escapes binary bytes as `\xNN`, quotes fields and protects formula-leading values with an apostrophe. SSID hex remains unchanged. Vendor IEs are summarized by prefix/payload length; enable PCAP if the full received IE bytes are needed.
 
-PCAP is **off by default**. Press **P** to retain only the latest **16** advertisements in a fixed ring. E then also writes `scan-001.pcap`. It is a bounded recent snapshot, not a continuous trace. The file uses classic little-endian PCAP with **DLT_IEEE802_11 (105)**, raw 802.11 frames, no RadioTap and no FCS. Timestamps are monotonic uptime in seconds/microseconds, which viewers display near the Unix epoch. There is no wall clock or NTP. RSSI/channel metadata remains in JSON rather than invented RadioTap headers. Data frames, client payloads and EAPOL are never admitted to the ring.
+Manual PCAP buffering is **off by default**; automatic BRCM archives always include their triggering frame. Press **P** to retain only the latest **16** advertisements in a fixed ring. E then also writes `scan-001.pcap`. It is a bounded recent snapshot, not a continuous trace. Both PCAP types use classic little-endian PCAP with **DLT_IEEE802_11 (105)**, raw 802.11 frames, no RadioTap and no FCS. Timestamps are monotonic uptime in seconds/microseconds, which viewers display near the Unix epoch. There is no wall clock or NTP. RSSI/channel metadata remains in JSON rather than invented RadioTap headers. Data frames, client payloads and EAPOL are never archived.
 
 The exported PCAP was independently opened with libpcap/tcpdump and the raw record structure was validated. Wireshark GUI opening has not been performed. This is the standard raw-802.11 PCAP format supported by Wireshark.
 
-An absent SD card does not stop scanning. Pressing E retries mounting. SD removal, write failure and rename failure are covered by host fault-injection tests. Physical card compatibility/hot insertion and worst-case card blocking latency are not verified.
+An absent SD card does not stop scanning. Pressing E or receiving another eligible Broadcom advertisement after the retry delay retries mounting. SD removal, write failure and rename failure are covered by host fault-injection tests. Physical card compatibility/hot insertion and worst-case card blocking latency are not verified.
 
 ## Build and automated checks
 

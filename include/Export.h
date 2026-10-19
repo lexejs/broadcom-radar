@@ -8,6 +8,9 @@ public:
     bool mount();
     bool available() const { return available_; }
     bool start(const AccessPointStore& store, const ScanStats& stats, const PcapRing& ring, const char* hardware);
+    bool needsDetection(const Observation& observation, const AccessPoint* aggregate, uint64_t nowUs) const;
+    bool saveDetection(const Observation& observation, const AccessPoint* aggregate, const Frame& frame,
+                       const ScanStats& stats, const char* hardware);
     void tick();
     bool busy() const { return phase_ != Phase::Idle; }
     const char* message() const { return message_; }
@@ -26,7 +29,15 @@ private:
     void fail(const char* reason);
     bool open(const char* extension);
     bool finishFile(const char* extension);
+    bool publishFile(const char* extension);
+    bool nextSequence();
     void filename(char* path, size_t capacity, const char* ext, bool partial) const;
+    struct SavedDetection {
+        uint8_t bssid[6]{}, evidence = 0, fields = 0;
+    };
+    SavedDetection saved_[kMaxAps]{};
+    size_t savedCount_ = 0, savedNext_ = 0;
+    uint64_t retryAfterUs_ = 0;
     SPIClass spi_{FSPI};
     fs::File file_;
     const AccessPointStore* store_ = nullptr;
@@ -34,6 +45,8 @@ private:
     Phase phase_ = Phase::Idle;
     size_t index_ = 0;
     unsigned sequence_ = 0;
+    unsigned detectionSequence_ = 0;
+    bool detection_ = false;
     bool available_ = false;
     char message_[64] = "SD unavailable";
 };

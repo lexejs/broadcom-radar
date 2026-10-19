@@ -2,11 +2,11 @@
 #include <cstring>
 namespace radar {
 void AccessPointStore::clear() { size_ = 0; dropped_ = 0; }
-bool AccessPointStore::observe(const Observation& obs) {
+const AccessPoint* AccessPointStore::observe(const Observation& obs) {
     size_t index = 0;
     while (index < size_ && std::memcmp(aps_[index].info.bssid, obs.bssid, 6)) ++index;
     if (index == size_) {
-        if (size_ == kMaxAps) { ++dropped_; return false; }
+        if (size_ == kMaxAps) { ++dropped_; return nullptr; }
         aps_[size_] = AccessPoint{};
         aps_[size_].info = obs;
         if (obs.malformed) aps_[size_].info.wpsAdvertised = false;
@@ -20,7 +20,7 @@ bool AccessPointStore::observe(const Observation& obs) {
     ap.info.rssi = obs.rssi;
     if (obs.rssi > ap.maxRssi) ap.maxRssi = obs.rssi;
     if (obs.captureChannel >= 1 && obs.captureChannel <= 14) ap.captureChannels |= 1 << (obs.captureChannel - 1);
-    if (obs.malformed) { ++ap.malformedAdvertisements; return true; }
+    if (obs.malformed) { ++ap.malformedAdvertisements; return &ap; }
     const bool firstComplete = ap.completeAdvertisements == 0;
     ++ap.completeAdvertisements;
     ap.info.malformed = false;
@@ -44,7 +44,7 @@ bool AccessPointStore::observe(const Observation& obs) {
         }
     }
     ap.info.vendorOverflow |= obs.vendorOverflow;
-    return true;
+    return &ap;
 }
 size_t AccessPointStore::broadcomCount() const {
     size_t count = 0;

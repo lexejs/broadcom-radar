@@ -19,5 +19,6 @@ python3 scripts/validate_exports.py .test-build
 python3 test/test_partition_check.py
 if command -v tcpdump >/dev/null 2>&1; then
   tcpdump -n -r .test-build/scan-001.pcap > .test-build/tcpdump.txt 2>&1
+  tcpdump -n -r .test-build/brcm-001.pcap > .test-build/tcpdump-brcm.txt 2>&1
   echo 'PASS: libpcap/tcpdump opened exported PCAP'
 fi
