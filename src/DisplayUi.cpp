@@ -7,14 +7,13 @@ namespace {
 constexpr unsigned kPages = 7;
 constexpr int kRowHeight = 15;
 constexpr size_t kVisibleNetworks = 5;
-constexpr Classification kDetectionOrder[] = {Classification::BroadcomSignature, Classification::WpsOnly,
-                                             Classification::NoSignature, Classification::InsufficientData};
-const char* badge(Classification status) {
-    switch (status) {
-        case Classification::BroadcomSignature: return "BRCM";
-        case Classification::WpsOnly: return "WPS";
-        case Classification::NoSignature: return "NONE";
-        default: return "WAIT";
+constexpr const char* kDetectionBadges[] = {"BRCM+WPS", "BRCM", "WPS", "NONE", "WAIT"};
+size_t detectionGroup(const AccessPoint& ap) {
+    switch (classify(ap)) {
+        case Classification::BroadcomSignature: return wpsState(ap) == WpsState::Yes ? 0 : 1;
+        case Classification::WpsOnly: return 2;
+        case Classification::NoSignature: return 3;
+        default: return 4;
     }
 }
 }
@@ -42,9 +41,9 @@ void DisplayUi::value(int row, const char* name, const Text& text) {
 void DisplayUi::updateOrder(const AccessPointStore& store) {
     const size_t selectedIndex = selected_ < orderedCount_ ? ordered_[selected_] : kMaxAps;
     orderedCount_ = selected_ = 0;
-    for (auto status : kDetectionOrder) {
+    for (size_t group = 0; group < sizeof(kDetectionBadges) / sizeof(kDetectionBadges[0]); ++group) {
         for (size_t i = 0; i < store.size(); ++i) {
-            if (classify(store.at(i)) != status) continue;
+            if (detectionGroup(store.at(i)) != group) continue;
             if (i == selectedIndex) selected_ = orderedCount_;
             ordered_[orderedCount_++] = static_cast<uint8_t>(i);
         }
@@ -170,7 +169,7 @@ void DisplayUi::draw(const AccessPointStore& store, const ScanStats& s, const Ex
             renderBytes(ap.info.ssid.data, ap.info.ssid.length, ssid, sizeof(ssid));
             foreground_ = status == Classification::BroadcomSignature ? TFT_ORANGE : TFT_WHITE;
             background_ = i == selected_ ? TFT_NAVY : TFT_BLACK;
-            line(3 + i - top, "%c%-4s %-11.11s %4d dBm", i == selected_ ? '>' : ' ', badge(status), hiddenSsid(ap.info.ssid) ? "<hidden>" : ssid, ap.info.rssi);
+            line(3 + i - top, "%c%-8s %-11.11s %4d", i == selected_ ? '>' : ' ', kDetectionBadges[detectionGroup(ap)], hiddenSsid(ap.info.ssid) ? "<hidden>" : ssid, ap.info.rssi);
         }
         foreground_ = TFT_CYAN; background_ = TFT_BLACK;
         if (ex.busy() || int32_t(noticeUntil_ - millis()) > 0) line(8, "%s", notice_[0] ? notice_ : ex.message());

@@ -333,7 +333,9 @@ void uiTests() {
     CHECK(M5Cardputer.Display.directClears==0);
     CHECK(M5Cardputer.Display.lines.size()==9);
     CHECK(M5Cardputer.Display.lines[3].find("BRCM")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[3].find("dBm")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find("-58")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].size()<=26);
     CHECK(M5Cardputer.Display.backgrounds[3]==TFT_NAVY);
     CHECK(M5Cardputer.Display.lines[7].empty());
     CHECK(M5Cardputer.Display.lines[8]=="S:pause M:channel H:help");
@@ -372,7 +374,7 @@ void uiTests() {
     for(unsigned i=1;i<=6;++i) store.observe(parse(beacon(text("Network-"+std::to_string(i)),i)));
     key("."); key("."); key("."); key("."); key(".");
     CHECK(M5Cardputer.Display.lines[3].find("Network-2")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[7].find(">NONE Network-6")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[7].find(">NONE     Network-6")!=std::string::npos);
     store.clear();
     store.observe(parse(beacon(text("ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"))));
     M5Cardputer.Keyboard.event(""); M5Cardputer.Keyboard.state.enter=true; tick();
@@ -394,8 +396,9 @@ void uiSortingTests() {
     auto withWps=beacon(text("With-WPS"),3);
     Data identity; tlv(identity,0x1021,text("Example Vendor")); wps(withWps,identity);
     store.observe(parse(withWps));
-    auto first=beacon(text("Broadcom-A"),4); proprietary(first); store.observe(parse(first));
+    auto first=beacon(text("Broadcom-A"),4); proprietary(first); wps(first,identity);
     auto second=beacon(text("Broadcom-B"),5); proprietary(second); store.observe(parse(second));
+    store.observe(parse(first)); // Both signals take priority even when discovered later.
     store.observe(parse(beacon(text("Plain-2"),6)));
     PcapRing ring; Exporter exporter; DisplayUi ui; CHECK(ui.begin());
     uint32_t rejected=0,malformed=0;
@@ -403,30 +406,30 @@ void uiSortingTests() {
     auto key=[&](const char* text) { M5Cardputer.Keyboard.event(text);tick(); };
     auto enter=[&]() { M5Cardputer.Keyboard.event("");M5Cardputer.Keyboard.state.enter=true;tick(); };
     M5Cardputer.Keyboard.event(""); M5Cardputer.Keyboard.changed=false; tick();
-    CHECK(M5Cardputer.Display.lines[3].find(">BRCM Broadcom-A")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[4].find("BRCM Broadcom-B")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[5].find("WPS  With-WPS")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[6].find("NONE Plain ")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[7].find("NONE Plain-2")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS Broadcom-A")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[4].find("BRCM     Broadcom-B")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[5].find("WPS      With-WPS")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[6].find("NONE     Plain ")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[7].find("NONE     Plain-2")!=std::string::npos);
     for(unsigned i=0;i<5;++i) key(".");
-    CHECK(M5Cardputer.Display.lines[7].find(">WAIT Waiting")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[7].find(">WAIT     Waiting")!=std::string::npos);
     enter(); CHECK(M5Cardputer.Display.lines[1]=="Waiting");
     key("`"); for(unsigned i=0;i<4;++i) key(";");
     enter(); CHECK(M5Cardputer.Display.lines[1]=="Broadcom-B");
     // New evidence can move an earlier AP ahead of the currently open AP.
-    auto promoted=beacon(text("Plain"),2); proprietary(promoted); store.observe(parse(promoted)); tick();
+    auto promoted=beacon(text("Plain"),2); proprietary(promoted); wps(promoted,identity); store.observe(parse(promoted)); tick();
     CHECK(M5Cardputer.Display.lines[1]=="Broadcom-B");
     key("`");
-    CHECK(M5Cardputer.Display.lines[3].find("BRCM Plain ")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[5].find(">BRCM Broadcom-B")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find("BRCM+WPS Plain ")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[5].find(">BRCM     Broadcom-B")!=std::string::npos);
     key(".");
-    auto completed=beacon(text("Waiting"),1); proprietary(completed); store.observe(parse(completed)); tick();
-    CHECK(M5Cardputer.Display.lines[3].find("BRCM Waiting")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[7].find(">WPS  With-WPS")!=std::string::npos);
+    auto completed=beacon(text("Waiting"),1); proprietary(completed); wps(completed,identity); store.observe(parse(completed)); tick();
+    CHECK(M5Cardputer.Display.lines[3].find("BRCM+WPS Waiting")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[7].find(">WPS      With-WPS")!=std::string::npos);
     enter(); CHECK(M5Cardputer.Display.lines[1]=="With-WPS");
     key("r"); CHECK(store.size()==0);
     store.observe(parse(beacon(text("Plain"),2))); store.observe(parse(first)); tick();
-    CHECK(M5Cardputer.Display.lines[3].find(">BRCM Broadcom-A")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS Broadcom-A")!=std::string::npos);
     CHECK(M5Cardputer.Display.boundsOk);
 }
 }
