@@ -46,8 +46,6 @@ jobs:
         with:
           name: broadcom-radar-firmware
           path: |
-            dist/RadarADV-*.bin
-            dist/RadarADV-*.bin.json
-            dist/Radar-*.bin
-            dist/Radar-*.bin.json
+            dist/BRCM-RDR-*.bin
+            dist/BRCM-RDR-*.bin.json
           if-no-files-found: error

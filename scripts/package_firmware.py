@@ -20,7 +20,7 @@ def package(source, target, env):
                         (project / "include" / "RadarTypes.h").read_text()).group(1)
     output = project / "dist"
     output.mkdir(exist_ok=True)
-    variant = "RadarADV" if env["PIOENV"] == "cardputer_adv" else "Radar"
+    variant = "BRCM-RDR" if env["PIOENV"] == "cardputer_adv" else "BRCM-RDR-S3"
     name = f"{variant}-{version}.bin"
     destination = output / name
     shutil.copyfile(binary, destination)
