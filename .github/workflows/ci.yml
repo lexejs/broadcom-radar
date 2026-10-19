@@ -1,0 +1,53 @@
+name: Build and test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host-tests:
+    name: Host tests (ASan and UBSan)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang tcpdump
+      - name: Test parsers, UI, scanner and exports
+        env:
+          CXX: clang++
+        run: bash scripts/test_host.sh
+
+  firmware:
+    name: Build both Cardputer variants
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install PlatformIO Core
+        run: python -m pip install platformio==6.1.19
+      - name: Build application images
+        run: pio run -e cardputer_adv -e cardputer
+      - name: Upload application images and SHA-256 manifests
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: broadcom-radar-firmware
+          path: |
+            dist/BroadcomRadar-CardputerADV.bin
+            dist/BroadcomRadar-CardputerADV.bin.json
+            dist/BroadcomRadar-Cardputer.bin
+            dist/BroadcomRadar-Cardputer.bin.json
+          if-no-files-found: error

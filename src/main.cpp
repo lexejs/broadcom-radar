@@ -1,0 +1,73 @@
+#include <Arduino.h>
+#include <M5Cardputer.h>
+#if RADAR_ADV
+#include <utility/Keyboard/KeyboardReader/TCA8418.h>
+#else
+#include <utility/Keyboard/KeyboardReader/IOMatrix.h>
+#endif
+#include "DisplayUi.h"
+
+namespace {
+radar::WifiScanner scanner;
+radar::AccessPointStore store;
+radar::PcapRing pcap;
+radar::Exporter exporter;
+radar::DisplayUi ui;
+radar::Frame frame;
+uint32_t rejected = 0, malformed = 0;
+bool scannerReady = false;
+#if RADAR_ADV
+constexpr const char* hardware = "M5Stack Cardputer ADV";
+#else
+constexpr const char* hardware = "M5Stack Cardputer";
+#endif
+}
+void setup() {
+    Serial.begin(115200);
+    auto config = M5.config();
+    config.external_spk = false; config.internal_spk = false;
+    config.internal_mic = false; config.internal_imu = false; config.internal_rtc = false;
+#if RADAR_ADV
+    config.fallback_board = m5::board_t::board_M5CardputerADV;
+#else
+    config.fallback_board = m5::board_t::board_M5Cardputer;
+#endif
+    M5Cardputer.begin(config, false);
+#if RADAR_ADV
+    M5Cardputer.Keyboard.begin(std::make_unique<TCA8418KeyboardReader>());
+#else
+    M5Cardputer.Keyboard.begin(std::make_unique<IOMatrixKeyboardReader>());
+#endif
+    const bool displayReady = ui.begin();
+    exporter.mount(); scannerReady = displayReady && scanner.begin();
+    Serial.printf("Broadcom Radar %s; %s; passive-only; heap=%u\n", radar::kFirmwareVersion, hardware, ESP.getFreeHeap());
+    if (!scannerReady) {
+        M5Cardputer.Display.fillScreen(TFT_BLACK);
+        M5Cardputer.Display.setCursor(0, 0);
+        M5Cardputer.Display.printf("BROADCOM RADAR\n%s\nRestart to retry", displayReady ? scanner.error() : "Display buffer unavailable");
+    }
+}
+void loop() {
+    M5Cardputer.update();
+    M5Cardputer.Keyboard.updateKeyList();
+    M5Cardputer.Keyboard.updateKeysState();
+    if (!scannerReady) { delay(20); return; }
+    scanner.tick();
+    if (!exporter.busy()) for (unsigned i = 0; i < 6 && scanner.pop(frame); ++i) {
+        radar::Observation observation;
+        pcap.add(frame);
+        if (radar::parseAdvertisement(frame.bytes, frame.length, frame.rssi, frame.channel, frame.timestampUs, observation)) {
+            if (observation.malformed) ++malformed;
+            store.observe(observation);
+        } else ++rejected;
+    }
+    ui.tick(store, scanner, exporter, pcap, rejected, malformed, hardware);
+    static uint32_t lastHealth = 0;
+    if (millis() - lastHealth >= 5000) {
+        const auto stats = scanner.stats();
+        Serial.printf("uptime_ms=%u heap=%u min_heap=%u aps=%u rx=%u queue_drops=%u store_drops=%u\n",
+                      unsigned(millis()), ESP.getFreeHeap(), ESP.getMinFreeHeap(), unsigned(store.size()), stats.received, stats.queueDrops, store.dropped());
+        lastHealth = millis();
+    }
+    delay(2);
+}

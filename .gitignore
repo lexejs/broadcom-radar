@@ -1,0 +1,13 @@
+.pio/
+.test-build/
+dist/
+__pycache__/
+*.py[cod]
+.venv/
+.DS_Store
+.vscode/
+.idea/
+*.part
+scan-*.json
+scan-*.csv
+scan-*.pcap
