@@ -233,10 +233,35 @@ void uiTests() {
     key("s"); CHECK(scanner.stats().running); key("`"); CHECK(probe.done() && probe.result().reason==ProbeReason::Cancelled);
     CHECK(M5Cardputer.Display.boundsOk && M5Cardputer.Display.directClears==0);
 }
+void blockedStartUiTests() {
+    WifiScanner scanner; CHECK(scanner.begin()); AccessPointStore store;
+    auto noWps=beacon({'H','K','_','O','m','n','i','_','2','0','+','_','S','e','t','u','p','_','3','a','4'});
+    proprietary(noWps); store.observe(target(noWps));
+    WpsProbe probe; Exporter exporter; PcapRing ring; DisplayUi ui; CHECK(ui.begin()); ui.attachProbe(probe);
+    uint32_t rejected=0,malformed=0;
+    auto tick=[&]() { mock::nowUs+=500000; ui.tick(store,scanner,exporter,ring,rejected,malformed,"Cardputer ADV"); M5Cardputer.Keyboard.changed=false; };
+    auto key=[&](const char* text) { M5Cardputer.Keyboard.event(text); tick(); };
+    auto enter=[&]() { M5Cardputer.Keyboard.event(""); M5Cardputer.Keyboard.state.enter=true; tick(); };
+    const auto txBefore=mock::transmitted.size(); key("t"); enter();
+    CHECK(!probe.busy());
+    CHECK(M5Cardputer.Display.lines[0]=="EXPERIMENTAL WPS TEST");
+    CHECK(M5Cardputer.Display.lines[4]=="WPS not observed");
+    CHECK(mock::transmitted.size()==txBefore && scanner.stats().running);
+    // Fresh WPS evidence arriving while confirmation is open must update the pinned AP.
+    auto withWps=noWps; Data attributes; tlv(attributes,0x104a,{0x10}); wps(withWps,attributes);
+    store.observe(target(withWps)); tick(); enter(); CHECK(probe.requested());
+    CHECK(probe.target().ssid.length==21 && probe.target().ssid.data[10]=='+');
+    key("`"); CHECK(probe.done());
+    // A hidden SSID stays on the confirmation screen with its actual blocking reason.
+    store.clear(); auto hidden=beacon({}); proprietary(hidden); Data version; tlv(version,0x104a,{0x10}); wps(hidden,version);
+    store.observe(target(hidden)); key("`"); key("t"); enter();
+    CHECK(!probe.busy() && M5Cardputer.Display.lines[4]=="Hidden SSID");
+    key("`"); CHECK(M5Cardputer.Display.lines[0]=="BROADCOM RADAR TEST");
+}
 }
 int main(int argc, char** argv) {
     try {
-        protocolTests(argc>1?argv[1]:nullptr); transportTests(); uiTests();
+        protocolTests(argc>1?argv[1]:nullptr); transportTests(); uiTests(); blockedStartUiTests();
         std::cout<<"PASS: "<<checks<<" experimental WPS checks; simulated responses only, not RF calibration\n";
     } catch(const std::exception& e) { std::cerr<<"FAIL: "<<e.what()<<'\n'; return 1; }
 }

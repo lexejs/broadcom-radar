@@ -45,6 +45,7 @@ const char* probeReasonName(ProbeReason reason);
 const char* probeResponseName(ProbeResponse response);
 class WpsProbe {
 public:
+    const char* startError(const Observation& target) const;
     bool request(const Observation& target);
     void begin(const uint8_t* station, uint64_t nowUs);
     void receive(const Frame& frame);

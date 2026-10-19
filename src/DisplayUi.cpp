@@ -114,10 +114,16 @@ void DisplayUi::draw(const AccessPointStore& store, const ScanStats& s, const Ex
         line(0, RADAR_DRIVER_COMPAT ? (RADAR_TRANSPORT_ONLY ? "WPS TRANSPORT TEST" : "WPS FINGERPRINT TEST") : "EXPERIMENTAL WPS TEST"); foreground_ = TFT_WHITE; background_ = TFT_BLACK;
         line(1, "%s", ssid); line(2, "%s CH:%u", mac, target.channel);
         if (screen_ == Screen::ProbeConfirm) {
-            line(3, "Active test of ONE AP"); line(4, "Use on your own AP only");
-            line(5, RADAR_DRIVER_COMPAT ? (RADAR_TRANSPORT_ONLY ? "Stop at WSC Start" : "One empty WPS fragment") : "Stock driver may reject TX");
-            line(6, RADAR_TRANSPORT_ONLY ? "Experimental driver mode" : "Uncalibrated fingerprint");
-            foreground_ = TFT_CYAN; line(8, "Enter:start Esc:cancel");
+            if (const char* reason = probe_->startError(target)) {
+                line(3, "TEST UNAVAILABLE"); line(4, "%s", reason);
+                line(5, "Waiting for fresh AP data"); line(6, "No packets sent");
+                foreground_ = TFT_CYAN; line(8, "Esc:back");
+            } else {
+                line(3, "Active test of ONE AP"); line(4, "Use on your own AP only");
+                line(5, RADAR_DRIVER_COMPAT ? (RADAR_TRANSPORT_ONLY ? "Stop at WSC Start" : "One empty WPS fragment") : "Stock driver may reject TX");
+                line(6, RADAR_TRANSPORT_ONLY ? "Experimental driver mode" : "Uncalibrated fingerprint");
+                foreground_ = TFT_CYAN; line(8, "Enter:start Esc:cancel");
+            }
         } else {
             const auto& r = probe_->result();
             line(3, "%s", probe_->busy() ? probeStageName(r.stage) : r.reason == ProbeReason::TransportReady ? "WSC START RECEIVED" : probeVerdictName(r.verdict));
@@ -193,6 +199,13 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
         if (resumeAfterExport_) scanner.setRunning(true);
     }
     updateOrder(store);
+#if RADAR_WPS_PROBE
+    if (probe_ && screen_ == Screen::ProbeConfirm) {
+        for (size_t i = 0; i < store.size(); ++i) if (!std::memcmp(store.at(i).info.bssid, probeTarget_.bssid, 6)) {
+            probeTarget_ = store.at(i).info; break;
+        }
+    }
+#endif
     auto& keyboard = M5Cardputer.Keyboard;
     if (keyboard.isChange() && keyboard.isPressed()) {
         dirty_ = true;
@@ -209,7 +222,6 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
                 else screen_ = Screen::List;
             } else if (screen_ == Screen::ProbeConfirm && keys.enter) {
                 if (probe_->request(probeTarget_)) screen_ = Screen::Probe;
-                else { notify("Need named WPS AP + channel"); screen_ = Screen::List; }
             } else if (screen_ == Screen::Probe && probe_->done()) {
                 for (char c : keys.word) if (c == 'e' || c == 'E') {
                     const bool running = scanner.stats().running;

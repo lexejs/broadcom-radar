@@ -18,7 +18,7 @@
 #endif
 
 namespace radar {
-constexpr const char* kFirmwareVersion = "1.0.7";
+constexpr const char* kFirmwareVersion = "1.0.8";
 constexpr size_t kMaxAps = 128;
 constexpr size_t kMaxFrame = 2304;
 constexpr size_t kQueueDepth = 12;

@@ -1,30 +1,30 @@
 # Broadcom Radar for M5Stack Cardputer
 
-Portable 2.4 GHz Broadcom Wi-Fi/WPS fingerprint detector for **M5Stack Cardputer ADV** and the **original Cardputer**, installed through M5Launcher. Firmware version: **1.0.7**.
+Portable 2.4 GHz Broadcom Wi-Fi/WPS fingerprint detector for **M5Stack Cardputer ADV** and the **original Cardputer**, installed through M5Launcher. Firmware version: **1.0.8**.
 
 Radar listens to Beacon and already present Probe Response frames, identifies three published Broadcom fingerprints, and shows the evidence on the device. It provides channel hopping or fixed-channel monitoring, a keyboard-driven interface, automatic Broadcom JSON/CSV/PCAP archives and manual scan export to microSD. Passive fingerprints do not establish vulnerability, patch status or safety. Default builds use no active scan, connection or packet-injection APIs. Separate experimental `-T` images add a manual WPS implementation probe using the stock public raw-TX API. The `-C` images test a narrowly scoped driver compatibility path and stop at WSC Start. The new `-F` images use that same path and then submit one empty first fragment to obtain an uncalibrated implementation-family candidate.
 
 ## Ready-to-install files
 
-Local builds generate application images and their SHA-256 manifests under `dist/`; generated files are excluded from source history. Version 1.0.7 has not been published to GitHub.
+Local builds generate application images and their SHA-256 manifests under `dist/`; generated files are excluded from source history. Version 1.0.8 has not been published to GitHub.
 
 | Hardware | Application image | Size |
 | --- | --- | --- |
-| Cardputer ADV (Stamp-S3A) | `BRCM-RDR-1.0.7.bin` | 1,005,760 bytes |
-| Original Cardputer (Stamp-S3) | `BRCM-RDR-S3-1.0.7.bin` | 1,005,856 bytes |
-| ADV, stock WPS probe | `BRCM-RDR-T-1.0.7.bin` | 1,027,008 bytes |
-| Original, stock WPS probe | `BRCM-RDR-S3-T-1.0.7.bin` | 1,027,120 bytes |
-| ADV, transport-only compatibility | `BRCM-RDR-C-1.0.7.bin` | 1,027,760 bytes |
-| Original, transport-only compatibility | `BRCM-RDR-S3-C-1.0.7.bin` | 1,027,856 bytes |
-| ADV, compatible WPS fingerprint | `BRCM-RDR-F-1.0.7.bin` | 1,027,776 bytes |
-| Original, compatible WPS fingerprint | `BRCM-RDR-S3-F-1.0.7.bin` | 1,027,872 bytes |
+| Cardputer ADV (Stamp-S3A) | `BRCM-RDR-1.0.8.bin` | 1,005,760 bytes |
+| Original Cardputer (Stamp-S3) | `BRCM-RDR-S3-1.0.8.bin` | 1,005,856 bytes |
+| ADV, stock WPS probe | `BRCM-RDR-T-1.0.8.bin` | 1,027,408 bytes |
+| Original, stock WPS probe | `BRCM-RDR-S3-T-1.0.8.bin` | 1,027,504 bytes |
+| ADV, transport-only compatibility | `BRCM-RDR-C-1.0.8.bin` | 1,028,176 bytes |
+| Original, transport-only compatibility | `BRCM-RDR-S3-C-1.0.8.bin` | 1,028,272 bytes |
+| ADV, compatible WPS fingerprint | `BRCM-RDR-F-1.0.8.bin` | 1,028,176 bytes |
+| Original, compatible WPS fingerprint | `BRCM-RDR-S3-F-1.0.8.bin` | 1,028,272 bytes |
 
 Filenames include the firmware version from `include/RadarTypes.h`. The adjacent `.bin.json` files contain exact sizes, SHA-256 hashes and required app partition sizes rounded to 64 KiB. These are **application-only** ESP32-S3 images, starting with `0xE9`. They contain no bootloader, partition table, filesystem image or configuration. Use the binary for your hardware: the ADV build explicitly selects the TCA8418 keyboard reader; the original selects the GPIO matrix reader.
 
 | Validation | Status |
 | --- | --- |
 | Eight firmware builds, host tests with ASan/UBSan and independent report/PCAP decoding | Passed on the development computer; protocol replies are simulated |
-| Cardputer ADV 1.0.6 transport reports | Seven distinct attempts: three reached WSC Start on three APs, four revalidation timeouts; all restored capture and observed subsequent ads. Version 1.0.7 fingerprint responses remain uncalibrated |
+| Cardputer ADV 1.0.7 fingerprint reports | Eleven distinct attempts: four Fragment ACK candidates, one EAP Failure candidate, six timeouts; all restored capture and observed subsequent ads. Implementation-family labels remain uncalibrated |
 | Original Cardputer, detailed keyboard/battery checks, independent radio measurement, recovery and long-running stability | Still require hardware acceptance checks |
 
 All eight images require an existing OTA app slot of at least **1,048,576 bytes** after 64 KiB alignment. A read-only Launcher API check on 19 October 2026 found the development ADV Radar slot `brcmrd` at exactly 1,048,576 bytes. Other devices can have different partition layouts; check the actual slot before installation.
@@ -33,7 +33,7 @@ All eight images require an existing OTA app slot of at least **1,048,576 bytes*
 
 1. Keep the existing Launcher installed. Before replacing an app, save its original `.bin`, back up that app and its data using the installed Launcher's backup facilities, and preserve `/config.conf` and `/bkp` on the SD card. Keep an off-card copy of important backups. Check the existing boot-to-Launcher/recovery setting before installation.
 2. Open **PMan** or the installed version's partition list. Identify an existing OTA app slot large enough for the `required_aligned_app_partition_bytes` in the selected `.bin.json`. The build enforces a conservative 1.5 MiB maximum, but this is a build guard, not a claim about your device's current free space. The resident Launcher partition must not be selected.
-3. Copy the matching `.bin` to the microSD card, for example `/firmware/BRCM-RDR-1.0.7.bin`. FAT32 on an MBR SDHC card is a conservative choice; the installed Launcher may also support other formats. Insert the card.
+3. Copy the matching `.bin` to the microSD card, for example `/firmware/BRCM-RDR-1.0.8.bin`. FAT32 on an MBR SDHC card is a conservative choice; the installed Launcher may also support other formats. Insert the card.
 4. Enter Launcher, open **SD**, select the `.bin`, then the install action. Choose the existing compatible OTA app slot, with the understanding that this replaces its previous app. Menu wording varies by Launcher version. Decline partition resizing, removal, compaction, formatting and filesystem installation if offered. This application needs no data partition. Stop if an existing slot does not fit.
 5. Start the installed app. The initial screen should show `BROADCOM RADAR`, `RUNNING`, and a changing channel. Reception is passive; wait through several channel sweeps.
 
@@ -42,7 +42,7 @@ All eight images require an existing OTA app slot of at least **1,048,576 bytes*
 If you already have a raw partition-table export or a CSV describing the actual installed table, this read-only check verifies that the image fits an existing OTA slot:
 
 ```sh
-python3 scripts/check_launcher_partition.py dist/BRCM-RDR-1.0.7.bin /path/to/actual-partitions.bin --label app1
+python3 scripts/check_launcher_partition.py dist/BRCM-RDR-1.0.8.bin /path/to/actual-partitions.bin --label app1
 ```
 
 Use the real OTA partition label. This script does not read or write flash, resize partitions or install anything. Without a real table, only image-format and build-limit checks are possible. Current upstream Launcher uses dynamic partitions; an 8 MB flash chip alone does not establish the available app slot size.
@@ -90,7 +90,7 @@ No result establishes vulnerability, patch status or safety. A proprietary IE ma
 
 ## Experimental on-device WPS tests
 
-All experimental modes require selecting your own named WPS AP, pressing **T**, reviewing the pinned BSSID/channel and pressing **Enter**. **Esc** cancels. Other scan-changing keys are disabled during a test. Automatic BRCM detection never starts an exchange. Hidden SSIDs and unsupported channels cannot start a test.
+All experimental modes require selecting your own named WPS AP, pressing **T**, reviewing the pinned BSSID/channel and pressing **Enter**. **Esc** cancels. Other scan-changing keys are disabled during a test. Automatic BRCM detection never starts an exchange. Hidden SSIDs and unsupported channels cannot start a test. Since 1.0.8, unavailable targets stay on the confirmation screen with their actual blocking reason, such as `Hidden SSID` or `WPS not observed`, instead of returning to the list. The pinned BSSID is refreshed from incoming observations while confirmation is open; later complete name/WPS data can make it eligible. A plus sign is valid SSID data and does not block testing. The BRCM badge takes precedence over WPS in the list, and component evidence can exist without observed WPS support.
 
 The transport-only baseline uses `cardputer_adv_transport` or `cardputer_transport`, packaged as `-C`. Its confirmation screen says `WPS TRANSPORT TEST`. It waits up to 10 seconds for a fresh matching complete WPS advertisement, then attempts open-system authentication, WPS association, EAP Identity and WSC Start. It stops at a received **WSC Start**, attempts cleanup only for its own station and restores the previous scanner mode. It sends no WPS differential, enrollment payload or continuation. `TRANSPORT_REACHED_WSC_START` still has implementation candidate `UNKNOWN`.
 
