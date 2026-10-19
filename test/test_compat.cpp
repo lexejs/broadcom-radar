@@ -90,7 +90,8 @@ void deliver(WifiScanner& scanner, WpsProbe& probe, const Data& bytes, int type 
     mock::callback(&packet,wifi_promiscuous_pkt_type_t(type));
     CHECK(scanner.pop(frame)); probe.receive(frame);
 }
-void sessionTest(const char* output) {
+void sessionTest(const char* output, ProbeResponse reply = ProbeResponse::FragmentAck, bool rejectFragment = false) {
+    mock::files.clear();
     WifiScanner scanner; CHECK(scanner.begin()); WpsProbe probe; WpsProbeRadio radio; Exporter exporter;
     auto bytes = advertisement(); CHECK(probe.request(target(bytes)));
     CHECK(!radio.tick(probe,scanner,exporter,frame,"Cardputer ADV"));
@@ -100,10 +101,37 @@ void sessionTest(const char* output) {
     deliver(scanner,probe,response(0x10,6)); CHECK(!radio.tick(probe,scanner,exporter,frame,"Cardputer ADV"));
     deliver(scanner,probe,eap({1,7,0,5,1}),WIFI_PKT_DATA); CHECK(!radio.tick(probe,scanner,exporter,frame,"Cardputer ADV"));
     deliver(scanner,probe,eap({1,8,0,14,0xfe,0,0x37,0x2a,0,0,0,1,1,0}),WIFI_PKT_DATA);
+    if (!RADAR_TRANSPORT_ONLY) {
+        CHECK(probe.result().stage == ProbeStage::Differential && probe.pending(frame));
+        CHECK(frame.length == 52 && frame.bytes[49] == 3 && frame.bytes[50] == 0 && frame.bytes[51] == 0);
+        // Compatibility never extends an invalid-argument rejection for the EAPOL data frame itself.
+        stockFailure = ESP_ERR_INVALID_ARG; const auto denied = transmitCompatible(frame,probe); stockFailure = 0;
+        CHECK(denied.error == ESP_ERR_INVALID_ARG && denied.observed && !denied.applied);
+        if (rejectFragment) mock::txResult = ESP_ERR_INVALID_ARG;
+    }
     CHECK(!radio.tick(probe,scanner,exporter,frame,"Cardputer ADV"));
-    CHECK(probe.restoring() && probe.result().reason == ProbeReason::TransportReady);
-    CHECK(probe.result().wscStartReceived && probe.result().verdict == ProbeVerdict::Unknown);
-    CHECK(probe.result().txAttempts == 5 && probe.result().txAccepted == 5 && probe.result().cleanupAccepted);
+    mock::txResult = 0;
+    if (RADAR_TRANSPORT_ONLY) {
+        CHECK(probe.restoring() && probe.result().reason == ProbeReason::TransportReady);
+        CHECK(!probe.result().differentialSent && probe.result().verdict == ProbeVerdict::Unknown);
+        CHECK(probe.result().txAttempts == 5 && probe.result().txAccepted == 5 && probe.result().cleanupAccepted);
+    } else if (rejectFragment) {
+        CHECK(probe.restoring() && probe.result().reason == ProbeReason::DriverRejected);
+        CHECK(!probe.result().differentialSent && probe.result().verdict == ProbeVerdict::Unknown);
+        CHECK(probe.result().response == ProbeResponse::None);
+    } else {
+        CHECK(probe.result().stage == ProbeStage::Differential && probe.result().differentialSent);
+        if (reply == ProbeResponse::FragmentAck) deliver(scanner,probe,eap({1,9,0,14,0xfe,0,0x37,0x2a,0,0,0,1,6,0}),WIFI_PKT_DATA);
+        else if (reply == ProbeResponse::EapFailure) deliver(scanner,probe,eap({4,8,0,4}),WIFI_PKT_DATA);
+        else if (reply == ProbeResponse::DeauthZero) deliver(scanner,probe,response(0xc0,2));
+        else mock::nowUs += 3000001;
+        CHECK(!radio.tick(probe,scanner,exporter,frame,"Cardputer ADV"));
+        CHECK(probe.restoring() && probe.result().response == reply);
+        CHECK(probe.result().reason == (reply == ProbeResponse::None ? ProbeReason::Timeout : ProbeReason::Response));
+        CHECK(probe.result().verdict == (reply == ProbeResponse::FragmentAck ? ProbeVerdict::HostapdLike :
+              reply == ProbeResponse::None ? ProbeVerdict::Unknown : ProbeVerdict::BroadcomLike));
+    }
+    CHECK(probe.result().wscStartReceived);
     CHECK(!probe.pending(frame));
     CHECK(scanner.stats().hopping && scanner.stats().running);
     // Normal capture admits a different AP after restoring the management-only filter.
@@ -111,13 +139,16 @@ void sessionTest(const char* output) {
     CHECK(radio.tick(probe,scanner,exporter,frame,"Cardputer ADV"));
     CHECK(probe.done() && probe.result().restored && probe.result().scanRxFrames == 1);
     CHECK(mock::files.count("/broadcom-radar/test-001.json"));
+    unsigned fragments = 0;
     for (unsigned i = 0; i < probe.result().txAttempts; ++i) {
-        const auto& tx = probe.result().tx[i]; CHECK(tx.stage != ProbeStage::Differential);
-        CHECK(tx.compatibilityApplied == (i == 0 || i == 1 || i == 4));
+        const auto& tx = probe.result().tx[i]; fragments += tx.stage == ProbeStage::Differential;
+        const bool management = tx.stage == ProbeStage::Authentication || tx.stage == ProbeStage::Association || tx.stage == ProbeStage::Cleanup;
+        CHECK(tx.compatibilityApplied == management);
     }
+    CHECK(fragments == (RADAR_TRANSPORT_ONLY ? 0u : 1u));
     if (output) for (const char* ext : {"json","pcap"}) {
         const auto& data = mock::files.at(std::string("/broadcom-radar/test-001.")+ext);
-        std::ofstream file(std::string(output)+"/transport-001."+ext,std::ios::binary);
+        std::ofstream file(std::string(output)+(RADAR_TRANSPORT_ONLY ? "/transport-001." : "/fingerprint-001.")+ext,std::ios::binary);
         file.write(reinterpret_cast<const char*>(data.data()),data.size()); CHECK(bool(file));
     }
 }
@@ -131,6 +162,10 @@ int main(int argc, char** argv) {
     try {
         mock::txResult = 0; mock::files.clear();
         diagnosticTests(); guardTests(); sessionTest(argc > 1 ? argv[1] : nullptr);
-        std::cout << "PASS: " << checks << " scoped compatibility and transport-only assertions; RF not calibrated\n";
+        if (!RADAR_TRANSPORT_ONLY) {
+            sessionTest(nullptr,ProbeResponse::EapFailure); sessionTest(nullptr,ProbeResponse::DeauthZero);
+            sessionTest(nullptr,ProbeResponse::None); sessionTest(nullptr,ProbeResponse::None,true);
+        }
+        std::cout << "PASS: " << checks << (RADAR_TRANSPORT_ONLY ? " scoped transport-only" : " scoped WPS fingerprint") << " assertions; RF not calibrated\n";
     } catch (const std::exception& e) { std::cerr << "FAIL: " << e.what() << '\n'; return 1; }
 }

@@ -63,6 +63,7 @@ report = json.loads((root / "test-001.json").read_text())
 assert report["mode"] == "experimental-active-wps"
 assert report["implementation_candidate"] == "HOSTAPD_LIKE"
 assert report["reason"] == "EXPLICIT_RESPONSE_UNCALIBRATED"
+assert report["differential_sent"] and report["differential_response"] == "WSC_FRAGMENT_ACK"
 assert not report["hardware_calibrated"] and not report["continuation_fragments_sent"]
 assert report["tx_accepted_by_driver"] == 6 and report["cleanup_accepted_by_driver"]
 assert report["declared_wps_message_length"] == 0 and report["trace_dropped"] == 0
@@ -95,6 +96,7 @@ assert report["schema_version"] == 2 and report["mode"] == "experimental-wps-tra
 assert report["driver_transport"] == "scoped-idf447-compatibility" and report["transport_only"]
 assert report["reason"] == "TRANSPORT_REACHED_WSC_START" and report["implementation_candidate"] == "UNKNOWN"
 assert report["wsc_start_received"] and report["declared_wps_message_length"] is None
+assert not report["differential_sent"] and report["differential_response"] == "NOT_OBSERVED"
 assert not report["hardware_calibrated"] and not report["continuation_fragments_sent"]
 assert report["scan_restored"] and report["scan_was_running"] and report["scan_rx_frames"] == 1
 assert report["revalidation"]["advertisements"] == 1 and report["revalidation"]["last_rssi_dbm"] == -55
@@ -122,3 +124,36 @@ assert frames[-2][36:] == bytes.fromhex("0108000efe00372a000000010100")  # Recei
 assert frames[-1][0] == 0xC0  # Own-session cleanup is the next and final TX.
 assert not any(len(p) >= 50 and p[0] == 8 and p[48:50] == b"\x04\x03" for p in frames)
 print("PASS: scoped transport report and 10 PCAP records; WSC Start, own cleanup, observed restored RX, no WPS differential")
+
+report = json.loads((root / "fingerprint-001.json").read_text())
+assert report["schema_version"] == 2 and report["mode"] == "experimental-active-wps"
+assert report["driver_transport"] == "scoped-idf447-compatibility" and not report["transport_only"]
+assert report["wsc_start_received"] and report["differential_sent"]
+assert report["differential_response"] == "WSC_FRAGMENT_ACK" and report["implementation_candidate"] == "HOSTAPD_LIKE"
+assert report["reason"] == "EXPLICIT_RESPONSE_UNCALIBRATED" and not report["hardware_calibrated"]
+assert not report["continuation_fragments_sent"] and report["declared_wps_message_length"] == 0
+assert report["scan_restored"] and report["scan_rx_frames"] == 1 and report["cleanup_accepted_by_driver"]
+attempts = report["tx_attempts"]
+assert [t["stage"] for t in attempts] == ["AUTHENTICATION", "ASSOCIATION", "EAP_IDENTITY", "WSC_START", "WPS_DIFFERENTIAL", "CLEANUP"]
+assert [t["compatibility_applied"] for t in attempts] == [True, True, False, False, False, True]
+assert all(t["driver_error"] == 0 for t in attempts) and report["tx_accepted_by_driver"] == 6
+data = (root / "fingerprint-001.pcap").read_bytes()
+assert struct.unpack_from("<IHHIIII", data) == (0xA1B2C3D4, 2, 4, 0, 0, 2304, 105)
+offset = 24
+frames = []
+for record in report["records"]:
+    _, _, captured, original = struct.unpack_from("<IIII", data, offset)
+    offset += 16
+    packet = data[offset:offset + captured]
+    assert captured == record["captured"] <= original == record["original"] and len(packet) == captured
+    if record["direction"] == "TX_DRIVER_ACCEPTED":
+        assert packet[4:10].hex() == report["bssid"].replace(":", "").lower()
+        assert packet[10:16].hex() == report["station"].replace(":", "").lower()
+    frames.append(packet)
+    offset += captured
+assert offset == len(data) and len(frames) == report["pcap_frames"] == 12
+assert frames[9][36:] == bytes.fromhex("02080010fe00372a0000000104030000")
+assert frames[10][36:] == bytes.fromhex("0109000efe00372a000000010600")
+assert frames[11][0] == 0xC0
+assert len([t for t in attempts if t["stage"] == "WPS_DIFFERENTIAL"]) == 1
+print("PASS: compatible WPS fingerprint report and PCAP; one empty first fragment, explicit ACK candidate, no continuation")

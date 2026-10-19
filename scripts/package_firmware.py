@@ -22,17 +22,20 @@ def package(source, target, env):
     output.mkdir(exist_ok=True)
     variant = "BRCM-RDR" if env["PIOENV"].startswith("cardputer_adv") else "BRCM-RDR-S3"
     transport = env["PIOENV"].endswith("_transport")
-    experimental = transport or env["PIOENV"].endswith("_probe")
+    fingerprint = env["PIOENV"].endswith("_fingerprint")
+    compatibility = transport or fingerprint
+    experimental = compatibility or env["PIOENV"].endswith("_probe")
     if experimental:
-        variant += "-C" if transport else "-T"
-    if transport and binary.stat().st_size > 1048576:
-        raise RuntimeError("Transport experiment exceeds the current 1 MiB device slot")
+        variant += "-C" if transport else "-F" if fingerprint else "-T"
+    if compatibility and binary.stat().st_size > 1048576:
+        raise RuntimeError("Compatibility experiment exceeds the current 1 MiB device slot")
     name = f"{variant}-{version}.bin"
     destination = output / name
     shutil.copyfile(binary, destination)
     metadata = {"file": name, "bytes": destination.stat().st_size,
                 "experimental_wps_probe": experimental,
-                "transport_only": transport, "driver_compatibility": transport,
+                "transport_only": transport, "driver_compatibility": compatibility,
+                "wps_differential": experimental and not transport,
                 "required_aligned_app_partition_bytes": (destination.stat().st_size + 65535) & ~65535,
                 "sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
                 "format": "ESP32-S3 application only; no bootloader or partition table"}

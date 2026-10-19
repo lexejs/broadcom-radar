@@ -7,12 +7,18 @@
 #ifndef RADAR_DRIVER_COMPAT
 #define RADAR_DRIVER_COMPAT 0
 #endif
+#ifndef RADAR_TRANSPORT_ONLY
+#define RADAR_TRANSPORT_ONLY RADAR_DRIVER_COMPAT
+#endif
 #if RADAR_DRIVER_COMPAT && !RADAR_WPS_PROBE
 #error Driver compatibility requires the manual WPS transport experiment
 #endif
+#if RADAR_TRANSPORT_ONLY && !RADAR_WPS_PROBE
+#error Transport-only mode requires the manual WPS test
+#endif
 
 namespace radar {
-constexpr const char* kFirmwareVersion = "1.0.6";
+constexpr const char* kFirmwareVersion = "1.0.7";
 constexpr size_t kMaxAps = 128;
 constexpr size_t kMaxFrame = 2304;
 constexpr size_t kQueueDepth = 12;

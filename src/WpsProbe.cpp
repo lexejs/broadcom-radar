@@ -44,6 +44,14 @@ const char* probeStageName(ProbeStage stage) {
 const char* probeVerdictName(ProbeVerdict verdict) {
     return verdict == ProbeVerdict::HostapdLike ? "HOSTAPD_LIKE" : verdict == ProbeVerdict::BroadcomLike ? "BRCM_WPS_LIKE" : "UNKNOWN";
 }
+const char* probeResponseName(ProbeResponse response) {
+    switch (response) {
+    case ProbeResponse::FragmentAck: return "WSC_FRAGMENT_ACK";
+    case ProbeResponse::EapFailure: return "EAP_FAILURE";
+    case ProbeResponse::DeauthZero: return "DEAUTH_REASON_ZERO";
+    default: return "NOT_OBSERVED";
+    }
+}
 const char* probeReasonName(ProbeReason reason) {
     switch (reason) {
     case ProbeReason::NotRun: return "NOT_RUN";
@@ -145,7 +153,7 @@ void WpsProbe::transmitted(int error, uint64_t nowUs, bool compatibilityApplied,
     }
     if (error) { driverFailure(error, nowUs); return; }
     if (result_.stage == ProbeStage::Authentication) sessionStarted_ = true;
-    if (result_.stage == ProbeStage::Differential) differentialSent_ = true;
+    if (result_.stage == ProbeStage::Differential) differentialSent_ = result_.differentialSent = true;
     deadlineUs_ = nowUs + 3000000ULL;
 }
 void WpsProbe::finish(ProbeReason reason, uint64_t nowUs, ProbeVerdict verdict) {
@@ -215,7 +223,12 @@ void WpsProbe::receive(const Frame& frame) {
     record(p, n, frame.timestampUs, false);
     if ((p[0] == 0xc0 || p[0] == 0xa0) && n >= 26) {
         result_.apStatus = le16(p + 24);
-        sessionStarted_ = false; finish(ProbeReason::ApRejected, frame.timestampUs); return;
+        sessionStarted_ = false;
+        if (p[0] == 0xc0 && result_.apStatus == 0 && result_.stage == ProbeStage::Differential && wpsEntered_ && differentialSent_) {
+            result_.response = ProbeResponse::DeauthZero;
+            finish(ProbeReason::Response, frame.timestampUs, ProbeVerdict::BroadcomLike);
+        } else finish(ProbeReason::ApRejected, frame.timestampUs);
+        return;
     }
     if (result_.stage == ProbeStage::Authentication) {
         if (p[0] != 0xb0 || n < 30 || le16(p + 24) != 0 || le16(p + 26) != 2) return;
@@ -249,11 +262,15 @@ void WpsProbe::receive(const Frame& frame) {
         return;
     }
     if (result_.stage == ProbeStage::Differential && wpsEntered_ && differentialSent_) {
-        if (eap[0] == 4 && length == 4 && eap[1] == identifier_)
+        // A retry of the WSC Start already answered by our single fragment is not a differential response.
+        if (eap[0] == 1 && wsc && length == 14 && eap[1] == identifier_ && eap[12] == 1 && eap[13] == 0) return;
+        if (eap[0] == 4 && length == 4 && eap[1] == identifier_) {
+            result_.response = ProbeResponse::EapFailure;
             finish(ProbeReason::Response, frame.timestampUs, ProbeVerdict::BroadcomLike);
-        else if (eap[0] == 1 && wsc && length == 14 && eap[12] == 6 && eap[13] == 0)
+        } else if (eap[0] == 1 && wsc && length == 14 && eap[12] == 6 && eap[13] == 0) {
+            result_.response = ProbeResponse::FragmentAck;
             finish(ProbeReason::Response, frame.timestampUs, ProbeVerdict::HostapdLike);
-        else finish(ProbeReason::UnexpectedEap, frame.timestampUs);
+        } else finish(ProbeReason::UnexpectedEap, frame.timestampUs);
         return;
     }
     finish(ProbeReason::UnexpectedEap, frame.timestampUs);

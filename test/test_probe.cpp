@@ -47,7 +47,7 @@ void transmit(WpsProbe& probe, int error=0) {
     CHECK(!std::memcmp(frame.bytes+10,station,6));
     probe.transmitted(error,++nowUs);
 }
-void entry(WpsProbe& probe) {
+void entry(WpsProbe& probe, bool submitFragment = true) {
     auto bytes=advertisement(); CHECK(probe.request(target(bytes))); probe.begin(station,nowUs);
     CHECK(!probe.pending(frame)); probe.receive(raw(bytes)); CHECK(probe.result().stage==ProbeStage::Authentication);
     CHECK(probe.pending(frame) && frame.bytes[0]==0xb0); transmit(probe);
@@ -59,7 +59,7 @@ void entry(WpsProbe& probe) {
     probe.receive(raw(expanded(8,1))); CHECK(probe.result().stage==ProbeStage::Differential);
     CHECK(probe.pending(frame) && frame.length==52);
     CHECK(frame.bytes[48]==4 && frame.bytes[49]==3 && frame.bytes[50]==0 && frame.bytes[51]==0);
-    transmit(probe);
+    if (submitFragment) transmit(probe);
 }
 void protocolTests(const char* output) {
     WpsProbe hostapd; entry(hostapd);
@@ -68,6 +68,7 @@ void protocolTests(const char* output) {
     CHECK(hostapd.pending(frame) && frame.bytes[0]==0xc0 && frame.bytes[24]==3); transmit(hostapd);
     CHECK(hostapd.done() && hostapd.result().cleanupAccepted && hostapd.result().driverError==0);
     CHECK(hostapd.result().txAccepted==6 && hostapd.recordCount()==12);
+    CHECK(hostapd.result().response==ProbeResponse::FragmentAck && hostapd.result().differentialSent);
     CHECK(!hostapd.pending(frame)); hostapd.tick(nowUs+30000000); CHECK(!hostapd.pending(frame));
     Exporter exporter; mock::files.clear(); CHECK(exporter.saveProbe(hostapd,"Cardputer ADV"));
     for(const char* ext : {"json","pcap"}) {
@@ -87,6 +88,28 @@ void protocolTests(const char* output) {
     WpsProbe broadcom; entry(broadcom); broadcom.receive(raw(eap({4,8,0,4})));
     CHECK(broadcom.result().verdict==ProbeVerdict::BroadcomLike); transmit(broadcom,ESP_ERR_INVALID_ARG);
     CHECK(broadcom.done() && !broadcom.result().cleanupAccepted && broadcom.result().cleanupError);
+    CHECK(broadcom.result().response==ProbeResponse::EapFailure);
+    WpsProbe disconnected; entry(disconnected); disconnected.receive(raw(apFrame(0xc0,2)));
+    CHECK(disconnected.done() && disconnected.result().verdict==ProbeVerdict::BroadcomLike);
+    CHECK(disconnected.result().response==ProbeResponse::DeauthZero && !disconnected.pending(frame));
+    WpsProbe otherDisconnect; entry(otherDisconnect); auto reason3=apFrame(0xc0,2); reason3[24]=3;
+    otherDisconnect.receive(raw(reason3)); CHECK(otherDisconnect.result().verdict==ProbeVerdict::Unknown);
+    CHECK(otherDisconnect.result().reason==ProbeReason::ApRejected && otherDisconnect.result().response==ProbeResponse::None);
+    WpsProbe disassociated; entry(disassociated); disassociated.receive(raw(apFrame(0xa0,2)));
+    CHECK(disassociated.result().verdict==ProbeVerdict::Unknown && disassociated.result().response==ProbeResponse::None);
+    WpsProbe unsent; entry(unsent,false); unsent.receive(raw(apFrame(0xc0,2)));
+    CHECK(unsent.result().verdict==ProbeVerdict::Unknown && !unsent.result().differentialSent);
+    transmit(unsent,ESP_ERR_INVALID_ARG); transmit(unsent);
+    CHECK(unsent.done() && unsent.result().reason==ProbeReason::DriverRejected && unsent.result().response==ProbeResponse::None);
+    WpsProbe earlyDisconnect; const auto earlyAd=advertisement(); CHECK(earlyDisconnect.request(target(earlyAd)));
+    earlyDisconnect.begin(station,nowUs); earlyDisconnect.receive(raw(earlyAd)); transmit(earlyDisconnect);
+    earlyDisconnect.receive(raw(apFrame(0xc0,2)));
+    CHECK(earlyDisconnect.done() && earlyDisconnect.result().verdict==ProbeVerdict::Unknown);
+    WpsProbe repeatedStart; entry(repeatedStart); const auto accepted=repeatedStart.result().txAccepted;
+    repeatedStart.receive(raw(expanded(8,1)));
+    CHECK(repeatedStart.result().stage==ProbeStage::Differential && !repeatedStart.pending(frame));
+    CHECK(repeatedStart.result().txAccepted==accepted);
+    repeatedStart.receive(raw(expanded(9,6))); CHECK(repeatedStart.result().verdict==ProbeVerdict::HostapdLike); transmit(repeatedStart);
     WpsProbe timeout; entry(timeout); timeout.tick(nowUs+3000001);
     CHECK(timeout.result().verdict==ProbeVerdict::Unknown && timeout.result().reason==ProbeReason::Timeout); transmit(timeout);
     WpsProbe rejected; entry(rejected); rejected.receive(raw(eap({4,99,0,4})));

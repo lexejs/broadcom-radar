@@ -4,6 +4,7 @@ namespace radar {
 constexpr size_t kProbeRecords = 16, kProbeBytes = 512;
 enum class ProbeStage { Idle, Requested, Advertisement, Authentication, Association, Identity, Start, Differential, Cleanup, Restore, Done };
 enum class ProbeVerdict { Unknown, HostapdLike, BroadcomLike };
+enum class ProbeResponse { None, FragmentAck, EapFailure, DeauthZero };
 enum class ProbeReason { NotRun, Running, Response, NoWps, Timeout, ApRejected, UnexpectedEap, DriverRejected, Cancelled, InvalidAdvertisement, TraceFull, RadioSetupFailed, TransportReady };
 struct ProbeTx {
     uint64_t timestampUs = 0;
@@ -23,6 +24,7 @@ struct ProbeResult {
     ProbeStage stage = ProbeStage::Idle, stoppedAt = ProbeStage::Idle;
     ProbeVerdict verdict = ProbeVerdict::Unknown;
     ProbeReason reason = ProbeReason::NotRun;
+    ProbeResponse response = ProbeResponse::None;
     uint64_t startedUs = 0, finishedUs = 0;
     int driverError = 0, cleanupError = 0;
     uint16_t txAccepted = 0, traceDropped = 0;
@@ -33,13 +35,14 @@ struct ProbeResult {
     int8_t lastRssi = 0;
     uint16_t apStatus = 0;
     uint32_t scanRxFrames = 0, queueDrops = 0, oversizeDrops = 0;
-    bool transportOnly = RADAR_DRIVER_COMPAT, wscStartReceived = false, scanWasRunning = false;
+    bool transportOnly = RADAR_TRANSPORT_ONLY, wscStartReceived = false, differentialSent = false, scanWasRunning = false;
     bool cleanupAccepted = false, restored = false, reported = false;
 };
 bool isProbeReply(const uint8_t* bytes, size_t length, const uint8_t* bssid, const uint8_t* station);
 const char* probeStageName(ProbeStage stage);
 const char* probeVerdictName(ProbeVerdict verdict);
 const char* probeReasonName(ProbeReason reason);
+const char* probeResponseName(ProbeResponse response);
 class WpsProbe {
 public:
     bool request(const Observation& target);

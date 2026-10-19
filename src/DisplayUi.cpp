@@ -111,12 +111,12 @@ void DisplayUi::draw(const AccessPointStore& store, const ScanStats& s, const Ex
     if (probe_ && (screen_ == Screen::ProbeConfirm || screen_ == Screen::Probe)) {
         const auto& target = screen_ == Screen::ProbeConfirm ? probeTarget_ : probe_->target();
         char ssid[129], mac[18]; renderBytes(target.ssid.data, target.ssid.length, ssid, sizeof(ssid)); renderMac(target.bssid, mac, sizeof(mac));
-        line(0, RADAR_DRIVER_COMPAT ? "WPS TRANSPORT TEST" : "EXPERIMENTAL WPS TEST"); foreground_ = TFT_WHITE; background_ = TFT_BLACK;
+        line(0, RADAR_DRIVER_COMPAT ? (RADAR_TRANSPORT_ONLY ? "WPS TRANSPORT TEST" : "WPS FINGERPRINT TEST") : "EXPERIMENTAL WPS TEST"); foreground_ = TFT_WHITE; background_ = TFT_BLACK;
         line(1, "%s", ssid); line(2, "%s CH:%u", mac, target.channel);
         if (screen_ == Screen::ProbeConfirm) {
             line(3, "Active test of ONE AP"); line(4, "Use on your own AP only");
-            line(5, RADAR_DRIVER_COMPAT ? "Stop at WSC Start" : "Stock driver may reject TX");
-            line(6, RADAR_DRIVER_COMPAT ? "Experimental driver mode" : "Uncalibrated fingerprint");
+            line(5, RADAR_DRIVER_COMPAT ? (RADAR_TRANSPORT_ONLY ? "Stop at WSC Start" : "One empty WPS fragment") : "Stock driver may reject TX");
+            line(6, RADAR_TRANSPORT_ONLY ? "Experimental driver mode" : "Uncalibrated fingerprint");
             foreground_ = TFT_CYAN; line(8, "Enter:start Esc:cancel");
         } else {
             const auto& r = probe_->result();

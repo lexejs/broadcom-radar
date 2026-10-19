@@ -155,6 +155,8 @@ bool writeProbeJson(Sink& sink, const WpsProbe& probe, const char* hardware) {
           probe.target().channel, (unsigned long long)r.startedUs, (unsigned long long)r.finishedUs);
     w.raw("\"implementation_candidate\":"); w.str(probeVerdictName(r.verdict)); w.raw(",\"reason\":"); w.str(probeReasonName(r.reason));
     w.raw(",\"stopped_at\":"); w.str(probeStageName(r.stoppedAt));
+    w.raw(",\"differential_response\":"); w.str(probeResponseName(r.response));
+    w.fmt(",\"differential_sent\":%s", r.differentialSent ? "true" : "false");
     w.raw(",\"driver_error_name\":");
     w.str(r.driverError == 0 ? "ESP_OK" : r.driverError == 0x102 ? "ESP_ERR_INVALID_ARG" : "SEE_NUMERIC_ERROR_CODE");
     w.fmt(",\"driver_error\":%d,\"tx_accepted_by_driver\":%u,\"cleanup_accepted_by_driver\":%s,\"cleanup_error\":%d,",

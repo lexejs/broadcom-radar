@@ -1,4 +1,4 @@
-"""Build-local, SHA-pinned symbol interposition for the transport-only experiment."""
+"""Build-local, SHA-pinned symbol interposition for manual WPS experiments."""
 Import("env")
 from pathlib import Path
 import hashlib
@@ -7,7 +7,7 @@ import shutil
 import struct
 import subprocess
 
-if env["PIOENV"].endswith("_transport"):
+if env["PIOENV"].endswith(("_transport", "_fingerprint")):
     sdk = Path(env.PioPlatform().get_package_dir("framework-arduinoespressif32")) / "tools/sdk/esp32s3/lib/libnet80211.a"
     expected = "6aae206c85e9009a24cd1f28ce535e2a2d578d9687fe2dc77d4697d45ebc8d0f"
     if hashlib.sha256(sdk.read_bytes()).hexdigest() != expected:

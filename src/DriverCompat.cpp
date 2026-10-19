@@ -12,7 +12,7 @@ bool extendManagement = false;
 radar::CompatTxResult outcome;
 bool managementRequest(const radar::Frame& frame, const radar::WpsProbe& probe) {
     const auto* p = frame.bytes; const size_t n = frame.length;
-    if (!probe.result().transportOnly || !probe.busy() || n < 26 || n > radar::kProbeBytes || p[1] ||
+    if (!probe.busy() || n < 26 || n > radar::kProbeBytes || p[1] ||
         p[2] || p[3] || (p[22] & 15) || std::memcmp(p + 4, probe.target().bssid, 6) ||
         std::memcmp(p + 10, probe.station(), 6) || std::memcmp(p + 16, probe.target().bssid, 6)) return false;
     const auto stage = probe.result().stage;
@@ -48,7 +48,7 @@ extern "C" __attribute__((used, noinline)) int ieee80211_raw_frame_sanity_check(
 namespace radar {
 CompatTxResult transmitCompatible(const Frame& frame, const WpsProbe& probe) {
     outcome = CompatTxResult{};
-    if (!probe.result().transportOnly || !probe.matchesPending(frame)) { outcome.error = ESP_ERR_INVALID_ARG; return outcome; }
+    if (!probe.busy() || !probe.matchesPending(frame)) { outcome.error = ESP_ERR_INVALID_ARG; return outcome; }
     const bool management = frame.length && (frame.bytes[0] & 0x0c) == 0;
     if (management && !managementRequest(frame, probe)) { outcome.error = ESP_ERR_INVALID_ARG; return outcome; }
     authorizedLength = frame.length;

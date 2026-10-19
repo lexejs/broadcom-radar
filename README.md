@@ -1,37 +1,39 @@
 # Broadcom Radar for M5Stack Cardputer
 
-Portable 2.4 GHz Broadcom Wi-Fi/WPS fingerprint detector for **M5Stack Cardputer ADV** and the **original Cardputer**, installed through M5Launcher. Firmware version: **1.0.6**.
+Portable 2.4 GHz Broadcom Wi-Fi/WPS fingerprint detector for **M5Stack Cardputer ADV** and the **original Cardputer**, installed through M5Launcher. Firmware version: **1.0.7**.
 
-Radar listens to Beacon and already present Probe Response frames, identifies three published Broadcom fingerprints, and shows the evidence on the device. It provides channel hopping or fixed-channel monitoring, a keyboard-driven interface, automatic Broadcom JSON/CSV/PCAP archives and manual scan export to microSD. Passive fingerprints do not establish vulnerability, patch status or safety. Default builds use no active scan, connection or packet-injection APIs. Separate experimental `-T` images add a manual WPS implementation probe using the stock public raw-TX API. The `-C` images test a narrowly scoped driver compatibility path and stop at WSC Start.
+Radar listens to Beacon and already present Probe Response frames, identifies three published Broadcom fingerprints, and shows the evidence on the device. It provides channel hopping or fixed-channel monitoring, a keyboard-driven interface, automatic Broadcom JSON/CSV/PCAP archives and manual scan export to microSD. Passive fingerprints do not establish vulnerability, patch status or safety. Default builds use no active scan, connection or packet-injection APIs. Separate experimental `-T` images add a manual WPS implementation probe using the stock public raw-TX API. The `-C` images test a narrowly scoped driver compatibility path and stop at WSC Start. The new `-F` images use that same path and then submit one empty first fragment to obtain an uncalibrated implementation-family candidate.
 
 ## Ready-to-install files
 
-Local builds generate application images and their SHA-256 manifests under `dist/`; generated files are excluded from source history. Version 1.0.6 has not been published to GitHub.
+Local builds generate application images and their SHA-256 manifests under `dist/`; generated files are excluded from source history. Version 1.0.7 has not been published to GitHub.
 
 | Hardware | Application image | Size |
 | --- | --- | --- |
-| Cardputer ADV (Stamp-S3A) | `BRCM-RDR-1.0.6.bin` | 1,005,760 bytes |
-| Original Cardputer (Stamp-S3) | `BRCM-RDR-S3-1.0.6.bin` | 1,005,856 bytes |
-| ADV, stock WPS probe | `BRCM-RDR-T-1.0.6.bin` | 1,026,752 bytes |
-| Original, stock WPS probe | `BRCM-RDR-S3-T-1.0.6.bin` | 1,026,864 bytes |
-| ADV, transport-only compatibility | `BRCM-RDR-C-1.0.6.bin` | 1,027,520 bytes |
-| Original, transport-only compatibility | `BRCM-RDR-S3-C-1.0.6.bin` | 1,027,600 bytes |
+| Cardputer ADV (Stamp-S3A) | `BRCM-RDR-1.0.7.bin` | 1,005,760 bytes |
+| Original Cardputer (Stamp-S3) | `BRCM-RDR-S3-1.0.7.bin` | 1,005,856 bytes |
+| ADV, stock WPS probe | `BRCM-RDR-T-1.0.7.bin` | 1,027,008 bytes |
+| Original, stock WPS probe | `BRCM-RDR-S3-T-1.0.7.bin` | 1,027,120 bytes |
+| ADV, transport-only compatibility | `BRCM-RDR-C-1.0.7.bin` | 1,027,760 bytes |
+| Original, transport-only compatibility | `BRCM-RDR-S3-C-1.0.7.bin` | 1,027,856 bytes |
+| ADV, compatible WPS fingerprint | `BRCM-RDR-F-1.0.7.bin` | 1,027,776 bytes |
+| Original, compatible WPS fingerprint | `BRCM-RDR-S3-F-1.0.7.bin` | 1,027,872 bytes |
 
 Filenames include the firmware version from `include/RadarTypes.h`. The adjacent `.bin.json` files contain exact sizes, SHA-256 hashes and required app partition sizes rounded to 64 KiB. These are **application-only** ESP32-S3 images, starting with `0xE9`. They contain no bootloader, partition table, filesystem image or configuration. Use the binary for your hardware: the ADV build explicitly selects the TCA8418 keyboard reader; the original selects the GPIO matrix reader.
 
 | Validation | Status |
 | --- | --- |
-| Six firmware builds, host tests with ASan/UBSan and independent report/PCAP decoding | Passed on the development computer; protocol replies are simulated |
-| Cardputer ADV 1.0.5 experimental device reports | Five distinct attempts: two authentication TX rejections (0x102), three advertisement timeouts; no WPS differential reached. Version 1.0.6 still requires device testing |
+| Eight firmware builds, host tests with ASan/UBSan and independent report/PCAP decoding | Passed on the development computer; protocol replies are simulated |
+| Cardputer ADV 1.0.6 transport reports | Seven distinct attempts: three reached WSC Start on three APs, four revalidation timeouts; all restored capture and observed subsequent ads. Version 1.0.7 fingerprint responses remain uncalibrated |
 | Original Cardputer, detailed keyboard/battery checks, independent radio measurement, recovery and long-running stability | Still require hardware acceptance checks |
 
-All six images require an existing OTA app slot of at least **1,048,576 bytes** after 64 KiB alignment. A read-only Launcher API check on 19 October 2026 found the development ADV Radar slot `radara` at exactly 1,048,576 bytes. Other devices can have different partition layouts; check the actual slot before installation.
+All eight images require an existing OTA app slot of at least **1,048,576 bytes** after 64 KiB alignment. A read-only Launcher API check on 19 October 2026 found the development ADV Radar slot `brcmrd` at exactly 1,048,576 bytes. Other devices can have different partition layouts; check the actual slot before installation.
 
 ## Installation through the existing M5Launcher
 
 1. Keep the existing Launcher installed. Before replacing an app, save its original `.bin`, back up that app and its data using the installed Launcher's backup facilities, and preserve `/config.conf` and `/bkp` on the SD card. Keep an off-card copy of important backups. Check the existing boot-to-Launcher/recovery setting before installation.
 2. Open **PMan** or the installed version's partition list. Identify an existing OTA app slot large enough for the `required_aligned_app_partition_bytes` in the selected `.bin.json`. The build enforces a conservative 1.5 MiB maximum, but this is a build guard, not a claim about your device's current free space. The resident Launcher partition must not be selected.
-3. Copy the matching `.bin` to the microSD card, for example `/firmware/BRCM-RDR-1.0.6.bin`. FAT32 on an MBR SDHC card is a conservative choice; the installed Launcher may also support other formats. Insert the card.
+3. Copy the matching `.bin` to the microSD card, for example `/firmware/BRCM-RDR-1.0.7.bin`. FAT32 on an MBR SDHC card is a conservative choice; the installed Launcher may also support other formats. Insert the card.
 4. Enter Launcher, open **SD**, select the `.bin`, then the install action. Choose the existing compatible OTA app slot, with the understanding that this replaces its previous app. Menu wording varies by Launcher version. Decline partition resizing, removal, compaction, formatting and filesystem installation if offered. This application needs no data partition. Stop if an existing slot does not fit.
 5. Start the installed app. The initial screen should show `BROADCOM RADAR`, `RUNNING`, and a changing channel. Reception is passive; wait through several channel sweeps.
 
@@ -40,7 +42,7 @@ All six images require an existing OTA app slot of at least **1,048,576 bytes** 
 If you already have a raw partition-table export or a CSV describing the actual installed table, this read-only check verifies that the image fits an existing OTA slot:
 
 ```sh
-python3 scripts/check_launcher_partition.py dist/BRCM-RDR-1.0.6.bin /path/to/actual-partitions.bin --label app1
+python3 scripts/check_launcher_partition.py dist/BRCM-RDR-1.0.7.bin /path/to/actual-partitions.bin --label app1
 ```
 
 Use the real OTA partition label. This script does not read or write flash, resize partitions or install anything. Without a real table, only image-format and build-limit checks are possible. Current upstream Launcher uses dynamic partitions; an 8 MB flash chip alone does not establish the available app slot size.
@@ -88,19 +90,21 @@ No result establishes vulnerability, patch status or safety. A proprietary IE ma
 
 ## Experimental on-device WPS tests
 
-Both experimental modes require selecting your own named WPS AP, pressing **T**, reviewing the pinned BSSID/channel and pressing **Enter**. **Esc** cancels. Other scan-changing keys are disabled during a test. Automatic BRCM detection never starts an exchange. Hidden SSIDs and unsupported channels cannot start a test.
+All experimental modes require selecting your own named WPS AP, pressing **T**, reviewing the pinned BSSID/channel and pressing **Enter**. **Esc** cancels. Other scan-changing keys are disabled during a test. Automatic BRCM detection never starts an exchange. Hidden SSIDs and unsupported channels cannot start a test.
 
-The recommended next hardware experiment uses `cardputer_adv_transport` or `cardputer_transport`, packaged as `-C`. Its confirmation screen says `WPS TRANSPORT TEST`. It waits up to 10 seconds for a fresh matching complete WPS advertisement, then attempts open-system authentication, WPS association, EAP Identity and WSC Start. It stops at a received **WSC Start**, attempts cleanup only for its own station and restores the previous scanner mode. It sends no WPS differential, enrollment payload or continuation. `TRANSPORT_REACHED_WSC_START` still has implementation candidate `UNKNOWN`.
+The transport-only baseline uses `cardputer_adv_transport` or `cardputer_transport`, packaged as `-C`. Its confirmation screen says `WPS TRANSPORT TEST`. It waits up to 10 seconds for a fresh matching complete WPS advertisement, then attempts open-system authentication, WPS association, EAP Identity and WSC Start. It stops at a received **WSC Start**, attempts cleanup only for its own station and restores the previous scanner mode. It sends no WPS differential, enrollment payload or continuation. `TRANSPORT_REACHED_WSC_START` still has implementation candidate `UNKNOWN`.
 
-The compatibility build copies the exact SHA-pinned ESP32-S3 IDF 4.4.7 `libnet80211.a` into its own build directory. It retains all original instructions, weakens one symbol and gives the original entry a separate alias. A strong wrapper calls the original sanity check first; an `ESP_ERR_INVALID_ARG` result is extended only during the synchronous submission of the current generated AUTH/ASSOC/own-cleanup request. BSSID, own station, stage, body, pending bytes and length are checked. Data frames retain the original checks. The build verifies the actual call target in the linked ELF and the unchanged global SDK hash, and refuses an unreviewed SDK or an image exceeding the current 1 MiB slot. Passive and `-T` builds do not link this compatibility layer. This is an unsupported driver experiment, not evidence of RF transport success.
+The `-C` and `-F` compatibility builds copy the exact SHA-pinned ESP32-S3 IDF 4.4.7 `libnet80211.a` into its own build directory. Each retains all original instructions, weakens one symbol and gives the original entry a separate alias. A strong wrapper calls the original sanity check first; an `ESP_ERR_INVALID_ARG` result is extended only during the synchronous submission of the current generated AUTH/ASSOC/own-cleanup request. BSSID, own station, stage, body, pending bytes and length are checked. Data frames retain the original checks. The build verifies the actual call target in the linked ELF and the unchanged global SDK hash, and refuses an unreviewed SDK or an image exceeding the current 1 MiB slot. Passive and `-T` builds do not link this compatibility layer. This is an unsupported driver experiment, not evidence of RF transport success.
 
-The older `cardputer_adv_probe` / `cardputer_probe` (`-T`) mode retains the uncalibrated differential: after WSC Start it submits one first fragment with declared WPS message length zero and no payload or continuation. It uses the stock public API. Stock IDF 4.4.7 does not document raw AUTH/ASSOC/cleanup support; real 1.0.5 device reports stopped at authentication TX rejection or advertisement revalidation. `HOSTAPD_LIKE` and `BRCM_WPS_LIKE` remain uncalibrated candidates following the upstream code, whose README describes the opposite response mapping. Neither mode establishes hostapd, a patch, vulnerability or safety.
+The new `cardputer_adv_fingerprint` / `cardputer_fingerprint` (`-F`) mode uses the working compatibility transport and continues after WSC Start. Its confirmation screen says `WPS FINGERPRINT TEST` and `One empty WPS fragment`. It submits exactly one first fragment with declared WPS message length zero and no payload or continuation. A valid WSC Fragment ACK maps to `HOSTAPD_LIKE`; a matching EAP Failure or a selected-AP deauthentication with reason 0 after accepted differential TX maps to `BRCM_WPS_LIKE`. The report records `differential_sent` and the exact `differential_response`. A repeated copy of the WSC Start already answered by that fragment is ignored without another TX. Timeouts, other disconnect reasons, unrelated responses and driver rejection yield UNKNOWN. Data frames, including the differential, retain stock driver checks. Cleanup addresses only this generated station.
+
+The older `cardputer_adv_probe` / `cardputer_probe` (`-T`) mode retains the uncalibrated differential: after WSC Start it submits one first fragment with declared WPS message length zero and no payload or continuation. It uses the stock public API. Stock IDF 4.4.7 does not document raw AUTH/ASSOC/cleanup support; real 1.0.5 device reports stopped at authentication TX rejection or advertisement revalidation. `HOSTAPD_LIKE` and `BRCM_WPS_LIKE` remain uncalibrated candidates following the upstream code, whose README describes the opposite response mapping. These candidates do not establish hostapd, a patch, vulnerability or safety.
 
 Each completed attempt writes `/broadcom-radar/test-NNN.json` and `.pcap`, independently of P. JSON is published last. Schema 2 records every bounded TX attempt and its stage, length, API error, actual stock-check result when observable (`null` for stock public API), and whether compatibility was applied. Revalidation counters distinguish missing WPS, malformed ads, SSID/channel mismatch and stale frames; last-target time/RSSI, AP rejection code and capture drops are retained. The 16-record trace captures up to 512 bytes per record, preserves original lengths and includes the first revalidation ad and the accepted one if different. Only driver-accepted TX buffers enter PCAP. The driver may rewrite sequence numbers; acceptance does not prove RF delivery.
 
 Reports are saved after restoring scanner settings and, when previously running, observing advertisements for up to 1.5 seconds. `scan_restored` records API success; `scan_rx_frames=0` explicitly means reception was not observed. A previously paused scanner needs no reception check. Scan errors remain visible on screen. **E** retries saving the retained report after an SD error. Diagnostic EAPOL capture stays restricted to the selected BSSID and this station; restored-reception counts contain no client payloads. Passive scan exports stay advertisement-only.
 
-Before enabling a compatibility differential, validate AUTH response, ASSOC success, EAP Identity, WSC Start, cleanup and resumed reception on one known control AP with an independent monitor capture. Check watchdog/heap stability and the actual Launcher slot. Driver acceptance, software fixtures and a green build cannot replace that measurement. If this single compatibility strategy requires further binary hacks or unstable radio state, stop the spike and evaluate a rebuilt native WPS component with explicit AP pinning and enrollment disabled.
+The 1.0.6 device traces demonstrate successful AUTH/ASSOC/EAP/WSC entry and subsequent scanner RX on three APs, but contain no diagnostic-fragment response. The new `-F` mode reuses this transport without another driver strategy. Compare its responses with a known hostapd control AP and an independent monitor capture before treating a candidate as calibrated. Existing host tests replay the full compatibility workflow with simulated ACK, Failure, reason-0 deauthentication, silence and TX rejection. No patch or vulnerability verdict is inferred.
 
 ## Radio and memory decisions
 
@@ -157,6 +161,8 @@ python3 -m venv .venv
 .venv/bin/pio run -e cardputer_adv_probe -e cardputer_probe
 # Optional transport-only compatibility experiment:
 .venv/bin/pio run -e cardputer_adv_transport -e cardputer_transport
+# Optional compatible WPS implementation fingerprint:
+.venv/bin/pio run -e cardputer_adv_fingerprint -e cardputer_fingerprint
 bash scripts/test_host.sh
 ```
 
@@ -164,7 +170,7 @@ The post-build hook produces only application `.bin` files and SHA-256 manifests
 
 [GitHub Actions](.github/workflows/ci.yml) is configured to run host checks and build passive and experimental images for both hardware variants on Ubuntu 24.04. Its firmware artifacts contain application images and SHA-256 manifests. Releases are published separately with the selected binaries; CI does not automatically publish or install firmware. Verify the manifest for the exact image you install: a CI artifact is a separate build from a release image.
 
-`scripts/check_passive.py` checks default Wi-Fi APIs against an explicit allowlist and isolates the experimental public raw-TX transport behind `RADAR_WPS_PROBE`. The separately gated `RADAR_DRIVER_COMPAT` layer is limited to transport-only builds. Default scanner mocks expose no active APIs. Experimental host tests use explicit simulated TX results and protocol replies, including unsupported-driver failure and scan restoration. These checks establish application API behavior, not an over-the-air measurement of the closed-source Wi-Fi driver.
+`scripts/check_passive.py` checks default Wi-Fi APIs against an explicit allowlist and isolates the experimental public raw-TX transport behind `RADAR_WPS_PROBE`. The separately gated `RADAR_DRIVER_COMPAT` layer is limited to explicit compatibility builds; `RADAR_TRANSPORT_ONLY` keeps `-C` at WSC Start. Default scanner mocks expose no active APIs. Experimental host tests use explicit simulated TX results and protocol replies, including unsupported-driver failure and scan restoration. These checks establish application API behavior, not an over-the-air measurement of the closed-source Wi-Fi driver.
 
 For coverage-guided fuzzing, use a compiler with libFuzzer:
 

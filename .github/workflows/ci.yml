@@ -40,7 +40,7 @@ jobs:
       - name: Install PlatformIO Core
         run: python -m pip install platformio==6.1.19
       - name: Build application images
-        run: pio run -e cardputer_adv -e cardputer -e cardputer_adv_probe -e cardputer_probe -e cardputer_adv_transport -e cardputer_transport
+        run: pio run -e cardputer_adv -e cardputer -e cardputer_adv_probe -e cardputer_probe -e cardputer_adv_transport -e cardputer_transport -e cardputer_adv_fingerprint -e cardputer_fingerprint
       - name: Upload application images and SHA-256 manifests
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
