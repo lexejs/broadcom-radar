@@ -1,6 +1,6 @@
 # Research and implementation boundary
 
-Sources inspected on 2026-10-18 before implementation. This is an independent C++ implementation of the passive fingerprinting rules, without importing Python networking, active test or exploitation code.
+Passive sources inspected on 2026-10-18 before implementation. This is an independent C++ implementation; Python networking and exploitation code are not imported. Separate experimental builds added on 2026-10-19 implement a bounded WPS exchange, with an explicit uncalibrated result boundary.
 
 ## Primary sources
 
@@ -32,11 +32,17 @@ The upstream default-identity test counts fields, not attribute repetitions. C++
 - Complete unknown IEs are represented by an IE-ID bitset. At most eight vendor prefix/length summaries are retained per AP; overflow is explicit. Full raw IEs are available in the optional bounded PCAP snapshot. Raw payloads are never treated as unbounded C strings.
 - Nonempty WPS values aggregate by completeness and retained length; evidence and characteristic field masks are unions. A later missing WPS IE cannot negate prior evidence. No negative result is represented as a statement that a network is safe.
 
-## Why active assessments are absent
+## Default passive builds and experimental WPS probe
 
-The original scanner has additional logic to distinguish WPS implementations by generated protocol exchanges. Its active assessments cannot be derived from a Beacon. No part of those transactions, authentication, association, fragment generation, EAP/WPS messaging, retransmission or cleanup is ported.
+The original scanner has additional logic to distinguish WPS implementations by generated protocol exchanges. Its active assessments cannot be derived from a Beacon. Default builds remain passive. The `cardputer_adv_probe` and `cardputer_probe` builds opt into a separate manual session, using public driver APIs without an override or binary patch.
 
-The resulting classification is a direct function of complete observations and the three evidence bits. `BROADCOM_SIGNATURE` takes precedence; otherwise complete WPS observations give `WPS_ONLY`, a complete ad without evidence gives `NO_SIGNATURE`, and only incomplete observations give `INSUFFICIENT_DATA`. Malformed later observations do not downgrade earlier complete evidence.
+The experimental exchange was checked against [`broadcom_fingerprint.py` at 8631a2cf07146568c5634aa6fcee116162883cb1](https://github.com/qkaiser/broadcom-wps/blob/8631a2cf07146568c5634aa6fcee116162883cb1/broadcom_fingerprint.py), downloaded on 2026-10-19 (SHA-256 `be584da942f323aa204e3d8e2e13b5b5c2e6262f91633a3ddc97ab0d7054d447`). It follows `decide_assessment()` and `fingerprint_target()`: an explicit EAP Failure after the differential maps to a Broadcom-like candidate, and a WSC Fragment ACK to a hostapd-like candidate. The upstream README describes the opposite mapping; this discrepancy and absence of real-device calibration are recorded rather than treating either candidate as a patch verdict.
+
+The independent bounded implementation pins BSSID/station/channel, revalidates a fresh complete WPS advertisement, attempts authentication/association and EAP entry, and submits one zero-length first fragment without a continuation. Replies predating the last accepted TX, foreign addresses, encrypted data, non-EAPOL payloads, invalid lengths and MAC fragments are excluded. Cleanup addresses only its own station. The trace is limited to 16 records of 512 captured bytes and distinguishes received frames from TX buffers accepted by the driver; a rejected submission is never represented as a transmitted PCAP record. Verdict-bearing trace overflow becomes UNKNOWN. There is no credential completion or exploit verification.
+
+The installed ESP-IDF 4.4.7 `esp_wifi.h` and [public raw-TX documentation](https://docs.espressif.com/projects/esp-idf/en/v4.4.7/esp32s3/api-reference/network/esp_wifi.html#_CPPv417esp_wifi_80211_tx16wifi_interface_tPKvib) list beacon/probe/action and non-QoS data support, not raw authentication/association/deauthentication. Stock-driver rejection at authentication is therefore an expected possible outcome, represented as UNKNOWN with its numeric driver error. Neither native acceptance of these subtypes nor the implementation candidates have been verified over the air. Host tests simulate both response families, driver rejection, malformed/old responses, cancellation, timeout, trace overflow, export faults and restoration of running/paused scan modes.
+
+The passive classification remains a direct function of complete observations and the three evidence bits. `BROADCOM_SIGNATURE` takes precedence; otherwise complete WPS observations give `WPS_ONLY`, a complete ad without evidence gives `NO_SIGNATURE`, and only incomplete observations give `INSUFFICIENT_DATA`. Malformed later observations do not downgrade earlier complete evidence. Experimental results are kept in separate `test-NNN.json/pcap` reports and do not replace passive evidence.
 
 ## ESP-IDF behavior and capture path
 

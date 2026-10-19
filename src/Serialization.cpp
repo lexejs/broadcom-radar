@@ -137,4 +137,32 @@ bool writePcapFrame(Sink& s, const Frame& f) {
     return u32(s, f.timestampUs / 1000000ULL) && u32(s, f.timestampUs % 1000000ULL) &&
            u32(s, f.length) && u32(s, f.length) && s.write(f.bytes, f.length);
 }
+bool writeProbePcapFrame(Sink& s, const ProbeRecord& r) {
+    if (!r.captured || r.captured > kProbeBytes || r.captured > r.original || r.original > kMaxFrame) return false;
+    return u32(s, r.timestampUs / 1000000ULL) && u32(s, r.timestampUs % 1000000ULL) &&
+           u32(s, r.captured) && u32(s, r.original) && s.write(r.bytes, r.captured);
+}
+bool writeProbeJson(Sink& sink, const WpsProbe& probe, const char* hardware) {
+    Writer w{sink}; const auto& r = probe.result(); char bssid[18], station[18];
+    renderMac(probe.target().bssid, bssid, sizeof(bssid)); renderMac(probe.station(), station, sizeof(station));
+    w.raw("{\"schema_version\":1,\"firmware_version\":"); w.str(kFirmwareVersion);
+    w.raw(",\"hardware\":"); w.str(hardware); w.raw(",\"mode\":\"experimental-active-wps\",\"bssid\":"); w.str(bssid);
+    w.raw(",\"station\":"); w.str(station); w.raw(","); w.field("ssid", probe.target().ssid);
+    w.fmt(",\"channel\":%u,\"started_us\":%llu,\"finished_us\":%llu,\"clock\":\"monotonic_since_boot\",",
+          probe.target().channel, (unsigned long long)r.startedUs, (unsigned long long)r.finishedUs);
+    w.raw("\"implementation_candidate\":"); w.str(probeVerdictName(r.verdict)); w.raw(",\"reason\":"); w.str(probeReasonName(r.reason));
+    w.raw(",\"stopped_at\":"); w.str(probeStageName(r.stoppedAt));
+    w.fmt(",\"driver_error\":%d,\"tx_accepted_by_driver\":%u,\"cleanup_accepted_by_driver\":%s,\"cleanup_error\":%d,",
+          r.driverError, r.txAccepted, r.cleanupAccepted ? "true" : "false", r.cleanupError);
+    w.fmt("\"pcap_frames\":%u,\"trace_dropped\":%u,\"trace_limit\":%u,\"captured_bytes_per_frame\":%u,",
+          unsigned(probe.recordCount()), r.traceDropped, unsigned(kProbeRecords), unsigned(kProbeBytes));
+    w.raw("\"hardware_calibrated\":false,\"continuation_fragments_sent\":false,\"declared_wps_message_length\":0,");
+    w.raw("\"claim_boundary\":\"Experimental implementation-family fingerprint; not proof of vulnerability or patch status. Driver acceptance does not prove over-the-air delivery. Scan restoration is checked separately after saving.\",\"records\":[");
+    for (size_t i = 0; i < probe.recordCount(); ++i) {
+        const auto& record = probe.record(i);
+        w.fmt("%s{\"pcap_index\":%u,\"direction\":\"%s\",\"captured\":%u,\"original\":%u}", i ? "," : "", unsigned(i),
+              record.tx ? "TX_DRIVER_ACCEPTED" : "RX", record.captured, record.original);
+    }
+    w.raw("]}\n"); return w.ok;
+}
 }

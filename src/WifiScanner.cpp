@@ -1,5 +1,8 @@
 #include "WifiScanner.h"
 #include "Parsers.h"
+#if RADAR_WPS_PROBE
+#include "WpsProbe.h"
+#endif
 #include <esp_event.h>
 #include <esp_netif.h>
 #include <esp_timer.h>
@@ -50,11 +53,18 @@ bool WifiScanner::begin() {
 }
 void WifiScanner::receive(void* buffer, wifi_promiscuous_pkt_type_t type) {
     auto* self = instance_;
-    if (!self || !buffer || type != WIFI_PKT_MGMT) return;
+    if (!self || !buffer) return;
     const auto* packet = static_cast<const wifi_promiscuous_pkt_t*>(buffer);
     const auto& rx = packet->rx_ctrl;
     // IDF 4.4.7 sig_len includes the four FCS bytes; raw PCAP omits them.
-    if (rx.rx_state != 0 || rx.sig_len < 40 || !isAdvertisement(packet->payload, rx.sig_len - 4)) return;
+    if (rx.rx_state != 0 || rx.sig_len < 28) return;
+#if RADAR_WPS_PROBE
+    if (self->probeCapture_) {
+        if ((type != WIFI_PKT_MGMT && type != WIFI_PKT_DATA) ||
+            !isProbeReply(packet->payload, rx.sig_len - 4, self->probeBssid_, self->probeStation_)) return;
+    } else
+#endif
+    if (type != WIFI_PKT_MGMT || rx.sig_len < 40 || !isAdvertisement(packet->payload, rx.sig_len - 4)) return;
     self->received_.fetch_add(1, std::memory_order_relaxed);
     const size_t length = rx.sig_len - 4;
     if (length > kMaxFrame) { self->oversize_.fetch_add(1, std::memory_order_relaxed); return; }
@@ -64,6 +74,16 @@ void WifiScanner::receive(void* buffer, wifi_promiscuous_pkt_type_t type) {
     std::memcpy(frame.bytes, packet->payload, length);
     if (xQueueSend(self->queue_, &frame, 0) != pdTRUE) self->drops_.fetch_add(1, std::memory_order_relaxed);
 }
+#if RADAR_WPS_PROBE
+bool WifiScanner::probeCapture(bool enabled, const uint8_t* bssid, const uint8_t* station) {
+    if (running_) return false;
+    wifi_promiscuous_filter_t filter{};
+    filter.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT | (enabled ? WIFI_PROMIS_FILTER_MASK_DATA : 0);
+    if (!check(esp_wifi_set_promiscuous_filter(&filter))) return false;
+    if (enabled) { std::memcpy(probeBssid_, bssid, 6); std::memcpy(probeStation_, station, 6); }
+    probeCapture_ = enabled; return true;
+}
+#endif
 bool WifiScanner::setRunning(bool run) {
     if (!ready_) return false;
     if (!check(esp_wifi_set_promiscuous(run))) return false;

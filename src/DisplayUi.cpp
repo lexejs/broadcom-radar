@@ -107,13 +107,39 @@ void DisplayUi::detail(const AccessPoint& ap, uint64_t nowUs) {
 void DisplayUi::draw(const AccessPointStore& store, const ScanStats& s, const Exporter& ex, const PcapRing& ring) {
     for (auto& row : rows_) row = Row{};
     foreground_ = TFT_WHITE; background_ = TFT_NAVY;
+#if RADAR_WPS_PROBE
+    if (probe_ && (screen_ == Screen::ProbeConfirm || screen_ == Screen::Probe)) {
+        const auto& target = screen_ == Screen::ProbeConfirm ? probeTarget_ : probe_->target();
+        char ssid[129], mac[18]; renderBytes(target.ssid.data, target.ssid.length, ssid, sizeof(ssid)); renderMac(target.bssid, mac, sizeof(mac));
+        line(0, "EXPERIMENTAL WPS TEST"); foreground_ = TFT_WHITE; background_ = TFT_BLACK;
+        line(1, "%s", ssid); line(2, "%s CH:%u", mac, target.channel);
+        if (screen_ == Screen::ProbeConfirm) {
+            line(3, "Active test of ONE AP"); line(4, "Use on your own AP only");
+            line(5, "Stock driver may reject TX"); line(6, "Uncalibrated fingerprint");
+            foreground_ = TFT_CYAN; line(8, "Enter:start Esc:cancel");
+        } else {
+            const auto& r = probe_->result();
+            line(3, "%s", probe_->busy() ? probeStageName(r.stage) : probeVerdictName(r.verdict));
+            line(4, "%s", probeReasonName(r.reason));
+            line(5, "TX:%u Frames:%u Err:%x", r.txAccepted, unsigned(probe_->recordCount()), unsigned(r.driverError));
+            line(6, "Not a patch/safety verdict");
+            if (probe_->done()) line(7, "%s", r.reported && !r.restored ? "Scan restore FAILED" : ex.message());
+            foreground_ = TFT_CYAN; line(8, probe_->busy() ? "Esc:cancel test" : "E:save report Esc:back");
+        }
+    } else
+#endif
     if (screen_ == Screen::Detail && selected_ < orderedCount_) detail(store.at(ordered_[selected_]), s.nowUs);
     else if (screen_ == Screen::Help) {
         line(0, "KEYBOARD HELP"); foreground_ = TFT_WHITE; background_ = TFT_BLACK;
         line(1, "; . , / : move / page"); line(2, "Enter: open / next / apply");
         line(3, "S: pause / resume scan"); line(4, "M: hop / hold channel");
         line(5, "E: save JSON / CSV / PCAP"); line(6, "P: PCAP %s (last %u)", ring.enabled() ? "ON" : "OFF", unsigned(kPcapDepth));
-        line(7, "R:clear Drop:%u", s.queueDrops + store.dropped()); foreground_ = TFT_CYAN; line(8, "Esc: back to networks");
+        line(7, "R:clear Drop:%u", s.queueDrops + store.dropped()); foreground_ = TFT_CYAN;
+#if RADAR_WPS_PROBE
+        line(8, "T:WPS test  Esc:back");
+#else
+        line(8, "Esc: back to networks");
+#endif
     } else if (screen_ == Screen::Channel) {
         line(0, "CHANNEL MODE"); foreground_ = TFT_WHITE; background_ = TFT_BLACK;
         line(1, "Country:%s  Channels:1-%u", RADAR_COUNTRY, s.channelCount);
@@ -123,7 +149,11 @@ void DisplayUi::draw(const AccessPointStore& store, const ScanStats& s, const Ex
         line(6, "Arrows: choose mode / CH"); line(7, "Enter: apply selection");
         foreground_ = TFT_CYAN; line(8, "Esc: cancel");
     } else {
+#if RADAR_WPS_PROBE
+        line(0, "BROADCOM RADAR TEST"); background_ = TFT_BLACK;
+#else
         line(0, "BROADCOM RADAR"); background_ = TFT_BLACK;
+#endif
         line(1, "%s %s CH:%02u B:%d%%", s.running ? "RUNNING" : "PAUSED", s.hopping ? "HOP" : "FIX", s.channel, M5Cardputer.Power.getBatteryLevel());
         line(2, "AP:%u/%u BRCM:%u SD:%s", unsigned(store.size()), unsigned(kMaxAps), unsigned(store.broadcomCount()), ex.available() ? "OK" : "--");
         const size_t top = selected_ >= kVisibleNetworks ? selected_ - kVisibleNetworks + 1 : 0;
@@ -171,6 +201,26 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
         const bool left = keys.left || keyboard.isKeyPressed(',');
         const bool right = keys.right || keyboard.isKeyPressed('/');
         const bool esc = keys.esc || keys.backspace || keyboard.isKeyPressed('`');
+#if RADAR_WPS_PROBE
+        if (probe_ && (screen_ == Screen::ProbeConfirm || screen_ == Screen::Probe)) {
+            if (esc) {
+                if (probe_->busy()) probe_->cancel(scanner.stats().nowUs);
+                else screen_ = Screen::List;
+            } else if (screen_ == Screen::ProbeConfirm && keys.enter) {
+                if (probe_->request(probeTarget_)) screen_ = Screen::Probe;
+                else { notify("Need named WPS AP + channel"); screen_ = Screen::List; }
+            } else if (screen_ == Screen::Probe && probe_->done()) {
+                for (char c : keys.word) if (c == 'e' || c == 'E') {
+                    const bool running = scanner.stats().running;
+                    if (!running || scanner.setRunning(false)) {
+                        exporter.saveProbe(*probe_, hardware);
+                        if (running) scanner.setRunning(true);
+                    }
+                }
+            }
+            draw(store, scanner.stats(), exporter, ring); lastDraw_ = millis(); dirty_ = false; return;
+        }
+#endif
         if (esc) screen_ = Screen::List;
         else if (screen_ == Screen::Channel) {
             unsigned choices = scanner.stats().channelCount + 1;
@@ -186,6 +236,11 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
         for (char c : keys.word) {
             if (exporter.busy()) break;
             if (c >= 'A' && c <= 'Z') c += 'a' - 'A';
+#if RADAR_WPS_PROBE
+            if (c == 't' && probe_ && (screen_ == Screen::List || screen_ == Screen::Detail) && selected_ < orderedCount_) {
+                probeTarget_ = store.at(ordered_[selected_]).info; screen_ = Screen::ProbeConfirm; break;
+            }
+#endif
             if (c == 'h') screen_ = screen_ == Screen::Help ? Screen::List : Screen::Help;
             if (c == 's') scanner.setRunning(!scanner.stats().running);
             if (c == 'r') {

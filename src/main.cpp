@@ -6,6 +6,7 @@
 #include <utility/Keyboard/KeyboardReader/IOMatrix.h>
 #endif
 #include "DisplayUi.h"
+#include "WpsProbeRadio.h"
 
 namespace {
 radar::WifiScanner scanner;
@@ -14,6 +15,10 @@ radar::PcapRing pcap;
 radar::Exporter exporter;
 radar::DisplayUi ui;
 radar::Frame frame;
+#if RADAR_WPS_PROBE
+radar::WpsProbe probe;
+radar::WpsProbeRadio probeRadio;
+#endif
 uint32_t rejected = 0, malformed = 0;
 bool scannerReady = false;
 #if RADAR_ADV
@@ -39,8 +44,12 @@ void setup() {
     M5Cardputer.Keyboard.begin(std::make_unique<IOMatrixKeyboardReader>());
 #endif
     const bool displayReady = ui.begin();
+#if RADAR_WPS_PROBE
+    ui.attachProbe(probe);
+#endif
     exporter.mount(); scannerReady = displayReady && scanner.begin();
-    Serial.printf("Broadcom Radar %s; %s; passive-only; heap=%u\n", radar::kFirmwareVersion, hardware, ESP.getFreeHeap());
+    Serial.printf("Broadcom Radar %s; %s; %s; heap=%u\n", radar::kFirmwareVersion, hardware,
+                  RADAR_WPS_PROBE ? "experimental manual WPS probe" : "passive-only", ESP.getFreeHeap());
     if (!scannerReady) {
         M5Cardputer.Display.fillScreen(TFT_BLACK);
         M5Cardputer.Display.setCursor(0, 0);
@@ -52,8 +61,14 @@ void loop() {
     M5Cardputer.Keyboard.updateKeyList();
     M5Cardputer.Keyboard.updateKeysState();
     if (!scannerReady) { delay(20); return; }
+#if RADAR_WPS_PROBE
+    if (probeRadio.tick(probe, scanner, exporter, frame, hardware)) ui.notify(exporter.message());
+#endif
     scanner.tick();
     if (!exporter.busy()) for (unsigned i = 0; i < 6 && scanner.pop(frame); ++i) {
+#if RADAR_WPS_PROBE
+        if (probe.busy()) { probe.receive(frame); continue; }
+#endif
         radar::Observation observation;
         pcap.add(frame);
         if (radar::parseAdvertisement(frame.bytes, frame.length, frame.rssi, frame.channel, frame.timestampUs, observation)) {
@@ -71,6 +86,9 @@ void loop() {
             }
         } else ++rejected;
     }
+#if RADAR_WPS_PROBE
+    if (probeRadio.tick(probe, scanner, exporter, frame, hardware)) ui.notify(exporter.message());
+#endif
     ui.tick(store, scanner, exporter, pcap, rejected, malformed, hardware);
     static uint32_t lastHealth = 0;
     if (millis() - lastHealth >= 5000) {

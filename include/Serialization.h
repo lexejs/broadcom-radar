@@ -1,5 +1,6 @@
 #pragma once
 #include "AccessPointStore.h"
+#include "WpsProbe.h"
 namespace radar {
 class Sink {
 public:
@@ -15,4 +16,6 @@ bool writeCsvHeader(Sink& sink);
 bool writeCsvAp(Sink& sink, const AccessPoint& ap);
 bool writePcapHeader(Sink& sink);
 bool writePcapFrame(Sink& sink, const Frame& frame);
+bool writeProbeJson(Sink& sink, const WpsProbe& probe, const char* hardware);
+bool writeProbePcapFrame(Sink& sink, const ProbeRecord& record);
 }

@@ -13,6 +13,15 @@ ALLOWED = {
 used = set()
 for path in sorted(list((ROOT / "src").glob("*.cpp")) + list((ROOT / "include").glob("*.h"))):
     content = path.read_text()
+    if path.name == "WpsProbeRadio.cpp":
+        if not content.startswith('#include "WpsProbeRadio.h"\n#if RADAR_WPS_PROBE\n') or not content.endswith("#endif\n"):
+            raise SystemExit("Experimental transport must remain entirely build-gated")
+        apis = set(re.findall(r"\b(esp_wifi_\w+)\s*\(", content))
+        if apis != {"esp_wifi_get_mac", "esp_wifi_80211_tx"}:
+            raise SystemExit(f"Experimental transport API changes require review: {apis}")
+        if re.search(r"\besp_wifi_internal_\w+|sanity_check|override|patch_driver", content):
+            raise SystemExit("Driver bypass forbidden in experimental transport")
+        continue
     used |= set(re.findall(r"\b(esp_wifi_\w+)\s*\(", content))
     if re.search(r"#\s*include\s*[<\"](?:WiFi|HTTPClient|WebServer|AsyncTCP|esp_supplicant|esp_wps|lwip/)", content):
         raise SystemExit(f"Network layer forbidden in {path.name}")
@@ -20,4 +29,4 @@ for path in sorted(list((ROOT / "src").glob("*.cpp")) + list((ROOT / "include").
         raise SystemExit(f"Active networking forbidden in {path.name}")
 if used != ALLOWED:
     raise SystemExit(f"Wi-Fi API changes require review: added={used - ALLOWED}, missing={ALLOWED - used}")
-print(f"PASS: production Wi-Fi API allowlist ({len(used)} APIs); no active network layer")
+print(f"PASS: default firmware passive API allowlist ({len(used)} APIs); experimental TX isolated behind build flag")

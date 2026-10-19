@@ -1,33 +1,35 @@
 # Broadcom Radar for M5Stack Cardputer
 
-Portable 2.4 GHz Broadcom Wi-Fi/WPS fingerprint detector for **M5Stack Cardputer ADV** and the **original Cardputer**, installed through M5Launcher. Firmware version: **1.0.4**.
+Portable 2.4 GHz Broadcom Wi-Fi/WPS fingerprint detector for **M5Stack Cardputer ADV** and the **original Cardputer**, installed through M5Launcher. Firmware version: **1.0.5**.
 
-Radar listens to Beacon and already present Probe Response frames, identifies three published Broadcom fingerprints, and shows the evidence on the device. It provides channel hopping or fixed-channel monitoring, a keyboard-driven interface, automatic Broadcom JSON/CSV/PCAP archives and manual scan export to microSD. Passive fingerprints do not establish vulnerability, patch status or safety. The application uses no active scan, connection or packet-injection APIs.
+Radar listens to Beacon and already present Probe Response frames, identifies three published Broadcom fingerprints, and shows the evidence on the device. It provides channel hopping or fixed-channel monitoring, a keyboard-driven interface, automatic Broadcom JSON/CSV/PCAP archives and manual scan export to microSD. Passive fingerprints do not establish vulnerability, patch status or safety. Default builds use no active scan, connection or packet-injection APIs. Separate experimental `-T` images add a manually started WPS implementation probe using the public raw-TX API.
 
 ## Ready-to-install files
 
-Local builds generate application images and their SHA-256 manifests under `dist/`; generated files are excluded from source history. Version 1.0.4 has not been published to GitHub.
+Local builds generate application images and their SHA-256 manifests under `dist/`; generated files are excluded from source history. Version 1.0.5 has not been published to GitHub.
 
 | Hardware | Application image | Size |
 | --- | --- | --- |
-| Cardputer ADV (Stamp-S3A) | `BRCM-RDR-1.0.4.bin` | 1,005,696 bytes |
-| Original Cardputer (Stamp-S3) | `BRCM-RDR-S3-1.0.4.bin` | 1,005,792 bytes |
+| Cardputer ADV (Stamp-S3A) | `BRCM-RDR-1.0.5.bin` | 1,005,760 bytes |
+| Original Cardputer (Stamp-S3) | `BRCM-RDR-S3-1.0.5.bin` | 1,005,856 bytes |
+| ADV, experimental WPS probe | `BRCM-RDR-T-1.0.5.bin` | 1,024,704 bytes |
+| Original, experimental WPS probe | `BRCM-RDR-S3-T-1.0.5.bin` | 1,024,784 bytes |
 
 Filenames include the firmware version from `include/RadarTypes.h`. The adjacent `.bin.json` files contain exact sizes, SHA-256 hashes and required app partition sizes rounded to 64 KiB. These are **application-only** ESP32-S3 images, starting with `0xE9`. They contain no bootloader, partition table, filesystem image or configuration. Use the binary for your hardware: the ADV build explicitly selects the TCA8418 keyboard reader; the original selects the GPIO matrix reader.
 
 | Validation | Status |
 | --- | --- |
-| Both firmware builds, 95,511 host assertions with ASan/UBSan (including 50,000 corrupt frames), manual/automatic JSON/CSV and libpcap decoding | Passed on the development computer |
-| Cardputer ADV 1.0.1 basic operation and updated display | Reported working by the device owner on 18 October 2026; 1.0.4 automatic SD archives still require a device check |
+| Four firmware builds, 95,511 default host assertions and 2,410 experimental assertions with ASan/UBSan, independent report/PCAP decoding | Passed on the development computer; protocol replies are simulated |
+| Cardputer ADV 1.0.1 basic operation and updated display | Reported working by the device owner on 18 October 2026; 1.0.5 and experimental WPS radio behavior still require a device check |
 | Original Cardputer, physical SD exports, detailed keyboard/battery checks, radio silence, recovery and long-running stability | Still require hardware acceptance checks |
 
-Both images require an existing OTA app slot of at least **1,048,576 bytes** after 64 KiB alignment. A read-only Launcher API check on the development ADV found a 1,114,112-byte slot on 18 October 2026. Other devices can have different partition layouts; check the actual slot before installation.
+All four images require an existing OTA app slot of at least **1,048,576 bytes** after 64 KiB alignment. A read-only Launcher API check on the development ADV found a 1,114,112-byte slot on 18 October 2026. Other devices can have different partition layouts; check the actual slot before installation.
 
 ## Installation through the existing M5Launcher
 
 1. Keep the existing Launcher installed. Before replacing an app, save its original `.bin`, back up that app and its data using the installed Launcher's backup facilities, and preserve `/config.conf` and `/bkp` on the SD card. Keep an off-card copy of important backups. Check the existing boot-to-Launcher/recovery setting before installation.
 2. Open **PMan** or the installed version's partition list. Identify an existing OTA app slot large enough for the `required_aligned_app_partition_bytes` in the selected `.bin.json`. The build enforces a conservative 1.5 MiB maximum, but this is a build guard, not a claim about your device's current free space. The resident Launcher partition must not be selected.
-3. Copy the matching `.bin` to the microSD card, for example `/firmware/BRCM-RDR-1.0.4.bin`. FAT32 on an MBR SDHC card is a conservative choice; the installed Launcher may also support other formats. Insert the card.
+3. Copy the matching `.bin` to the microSD card, for example `/firmware/BRCM-RDR-1.0.5.bin`. FAT32 on an MBR SDHC card is a conservative choice; the installed Launcher may also support other formats. Insert the card.
 4. Enter Launcher, open **SD**, select the `.bin`, then the install action. Choose the existing compatible OTA app slot, with the understanding that this replaces its previous app. Menu wording varies by Launcher version. Decline partition resizing, removal, compaction, formatting and filesystem installation if offered. This application needs no data partition. Stop if an existing slot does not fit.
 5. Start the installed app. The initial screen should show `BROADCOM RADAR`, `RUNNING`, and a changing channel. Reception is passive; wait through several channel sweeps.
 
@@ -36,7 +38,7 @@ Both images require an existing OTA app slot of at least **1,048,576 bytes** aft
 If you already have a raw partition-table export or a CSV describing the actual installed table, this read-only check verifies that the image fits an existing OTA slot:
 
 ```sh
-python3 scripts/check_launcher_partition.py dist/BRCM-RDR-1.0.4.bin /path/to/actual-partitions.bin --label app1
+python3 scripts/check_launcher_partition.py dist/BRCM-RDR-1.0.5.bin /path/to/actual-partitions.bin --label app1
 ```
 
 Use the real OTA partition label. This script does not read or write flash, resize partitions or install anything. Without a real table, only image-format and build-limit checks are possible. Current upstream Launcher uses dynamic partitions; an 8 MB flash chip alone does not establish the available app slot size.
@@ -80,13 +82,23 @@ Only changed rows are transferred to the display, at most twice per second for s
 | `NO_SIGNATURE` | `NO SIGNATURE` / `NONE` | A complete advertisement was parsed without a characteristic signature |
 | `INSUFFICIENT_DATA` | `INCONCLUSIVE` / `WAIT` | Only malformed/incomplete attributable advertisements have been observed |
 
-No result establishes vulnerability, patch status or safety. A proprietary IE may originate in a Broadcom driver while the WPS implementation comes from another source. Firmware does not implement active differential testing, authentication, association, EAP/WPS transactions, deauthentication, packet injection, active scans or probe transmission. BSSID OUI attribution is intentionally omitted.
+No result establishes vulnerability, patch status or safety. A proprietary IE may originate in a Broadcom driver while the WPS implementation comes from another source. Default builds do not implement active transactions or packet transmission. BSSID OUI attribution is intentionally omitted.
+
+## Experimental on-device WPS probe
+
+Build `cardputer_adv_probe` or `cardputer_probe` and use the corresponding `-T` image. Its title is `BROADCOM RADAR TEST`. Select your own named WPS AP, press **T**, review the pinned BSSID/channel, then press **Enter** to start. **Esc** cancels. Other scan-changing keys are disabled while the test screen is active. Automatic BRCM detection never starts this exchange.
+
+The bounded state machine waits for a fresh matching WPS advertisement, attempts open-system authentication and WPS association, enters EAP/WSC, and sends one first fragment with declared WPS message length zero and no payload or continuation. It attempts cleanup for its own station and restores the prior scan mode/running state. There are no PIN guesses, credential extraction, memory reads or exploit payloads. Hidden SSIDs and unsupported channels cannot start a test. Missing/invalid responses, a timeout, driver rejection or trace overflow give `UNKNOWN`.
+
+`HOSTAPD_LIKE` and `BRCM_WPS_LIKE` are **uncalibrated implementation candidates**, following the current upstream code rather than its contradictory README response description. Neither result establishes a patch or vulnerability. Known hostapd and Broadcom devices have not been tested over the air. Stock ESP-IDF 4.4.7 documents raw TX support for beacon/probe/action and non-QoS data frames, excluding the authentication/association/cleanup management subtypes needed here. Consequently this prototype may stop at `AUTHENTICATION` with `DRIVER_REJECTED_TX`; it uses no driver bypass. A completed software build is not evidence that the driver accepted these frames.
+
+Each completed attempt automatically writes `/broadcom-radar/test-NNN.json` and `.pcap`, independently of P. JSON is renamed last as the completion marker. The trace holds up to 16 records of up to 512 captured bytes, with original lengths retained. JSON maps PCAP indices to RX or TX accepted by the driver. Rejected TX attempts appear only as errors, not as transmitted PCAP records. Accepted TX records contain submitted buffers; the driver can change sequence numbers and acceptance does not prove RF delivery. Diagnostic EAPOL data is restricted to the selected BSSID and this device's station MAC. The ordinary scan PCAP ring remains advertisement-only. Press E on the completed test screen to retry saving the retained report after an SD error. Scan restoration errors are shown separately on screen after the capture report is saved.
 
 ## Radio and memory decisions
 
 - Default country: **PL**, manual regulatory policy, channels **1-13**, 400 ms dwell. This matches the development location. Set `RADAR_COUNTRY` in `platformio.ini` to the actual operating country before rebuilding elsewhere. `esp_wifi_set_country_code(..., false)` applies the SDK country rules; the returned manual policy/range is verified. Hopping follows that range and never includes channel 14. An 11-channel country restricts the menu and hopping to 1-11.
 - Idle STA mode is initialized directly through ESP-IDF. Wi-Fi storage is RAM, NVS credential loading is disabled, and station configuration is empty. No default station network interface or reconnect event handler is created. `esp_wifi_start()` initializes the idle station control block; only `esp_wifi_connect()` would initiate connection/scanning, and that API is not called. `esp_wifi_scan_start()` is also absent.
-- The receive callback accepts only management Beacon/Probe Response frames, checks driver error state and lengths, copies into a **12-frame static FreeRTOS queue** with zero wait, and returns. Processing, drawing and SD writes happen in the Arduino loop. A driver-owned buffer pointer is never retained.
+- The default receive callback accepts only management Beacon/Probe Response frames, checks driver error state and lengths, copies into a **12-frame static FreeRTOS queue** with zero wait, and returns. During a manually started experimental test it also admits selected-AP session replies and EAPOL addressed to this device. Processing, drawing and SD writes happen in the Arduino loop. A driver-owned buffer pointer is never retained.
 - Raw frame capacity: **2304 bytes**, excluding FCS. Oversized advertisements are dropped and counted. IDF 4.4.7 `sig_len` includes FCS, so the callback strips its final four bytes before parsing/PCAP.
 - AP capacity: **128 BSSIDs**, retained until R/restart. At capacity, existing BSSIDs continue to update; observations of new BSSIDs are dropped and counted. Identical SSIDs do not merge different BSSIDs. Evidence is cumulative; later missing or malformed fields never erase confirmed evidence. RSSI uses the latest observation; maximum RSSI is also retained.
 - WPS reassembly: **1024 bytes per advertisement**; text fields: **64 bytes each**; SSID: **32 raw bytes**; vendor IE summaries: **8 per AP**. Oversized text is marked truncated and cannot match a default identity by prefix. Complete nonempty identity fields are retained by completeness/length, not replaced by missing fields. Different matching identity fields across complete advertisements can combine into the default-identity signature; the field mask is exported.
@@ -105,7 +117,7 @@ JSON includes schema/firmware/hardware, `passive-only`, monotonic timestamps, co
 
 JSON strings preserve byte values with `\u00XX` escapes; they are not a UTF-8 interpretation of binary SSIDs. `ssid_hex` is authoritative for original bytes. CSV escapes binary bytes as `\xNN`, quotes fields and protects formula-leading values with an apostrophe. SSID hex remains unchanged. Vendor IEs are summarized by prefix/payload length; enable PCAP if the full received IE bytes are needed.
 
-Manual PCAP buffering is **off by default**; automatic BRCM archives always include their triggering frame. Press **P** to retain only the latest **16** advertisements in a fixed ring. E then also writes `scan-001.pcap`. It is a bounded recent snapshot, not a continuous trace. Both PCAP types use classic little-endian PCAP with **DLT_IEEE802_11 (105)**, raw 802.11 frames, no RadioTap and no FCS. Timestamps are monotonic uptime in seconds/microseconds, which viewers display near the Unix epoch. There is no wall clock or NTP. RSSI/channel metadata remains in JSON rather than invented RadioTap headers. Data frames, client payloads and EAPOL are never archived.
+Manual PCAP buffering is **off by default**; automatic BRCM archives always include their triggering frame. Press **P** to retain only the latest **16** advertisements in a fixed ring. E then also writes `scan-001.pcap`. It is a bounded recent snapshot, not a continuous trace. Both passive PCAP types use classic little-endian PCAP with **DLT_IEEE802_11 (105)**, raw 802.11 frames, no RadioTap and no FCS. Timestamps are monotonic uptime in seconds/microseconds, which viewers display near the Unix epoch. There is no wall clock or NTP. RSSI/channel metadata remains in JSON rather than invented RadioTap headers. Data frames, client payloads and EAPOL are never archived by passive scan exports; experimental test reports have their own bounded session trace.
 
 The exported PCAP was independently opened with libpcap/tcpdump and the raw record structure was validated. Wireshark GUI opening has not been performed. This is the standard raw-802.11 PCAP format supported by Wireshark.
 
@@ -133,14 +145,16 @@ M5Cardputer's 1.2.0 tag still declares 1.1.1 in `library.json`; the immutable ar
 python3 -m venv .venv
 .venv/bin/pip install platformio==6.1.19
 .venv/bin/pio run -e cardputer_adv -e cardputer
+# Optional experimental on-device WPS probe images:
+.venv/bin/pio run -e cardputer_adv_probe -e cardputer_probe
 bash scripts/test_host.sh
 ```
 
 The post-build hook produces only application `.bin` files and SHA-256 manifests under `dist/`. Host checks compile production parsers, detector, store, serializers, scanner, UI and exporter with ASan/UBSan. Hardware seams use bounded mock queue, Wi-Fi, display/keyboard and SD backends. Tests cover synthetic signatures, malformed/truncated TLVs/IEs, binary/hidden SSIDs, BSSID separation, aggregation, overflow, callback buffer copying, hopping/hold, country restrictions, controls, no-SD/export faults, file non-overwrite and independent JSON/CSV/PCAP reads. They also exercise 50,000 deterministic damaged inputs. On macOS, LeakSanitizer is unsupported and disabled; address/undefined-behavior sanitizers remain enabled.
 
-[GitHub Actions](.github/workflows/ci.yml) is configured to run host checks and build both firmware variants on Ubuntu 24.04. Its firmware artifacts contain application images and SHA-256 manifests. Releases are published separately with the selected binaries; CI does not automatically publish or install firmware. Verify the manifest for the exact image you install: a CI artifact is a separate build from a release image.
+[GitHub Actions](.github/workflows/ci.yml) is configured to run host checks and build passive and experimental images for both hardware variants on Ubuntu 24.04. Its firmware artifacts contain application images and SHA-256 manifests. Releases are published separately with the selected binaries; CI does not automatically publish or install firmware. Verify the manifest for the exact image you install: a CI artifact is a separate build from a release image.
 
-`scripts/check_passive.py` checks production Wi-Fi APIs against an explicit allowlist and rejects active networking layers. The scanner mock exposes no active APIs, so adding one also fails the host compilation. These checks establish application API behavior, not an over-the-air measurement of the closed-source Wi-Fi driver.
+`scripts/check_passive.py` checks default Wi-Fi APIs against an explicit allowlist and isolates the experimental public raw-TX transport behind `RADAR_WPS_PROBE`. Default scanner mocks expose no active APIs. Experimental host tests use explicit simulated TX results and protocol replies, including unsupported-driver failure and scan restoration. These checks establish application API behavior, not an over-the-air measurement of the closed-source Wi-Fi driver.
 
 For coverage-guided fuzzing, use a compiler with libFuzzer:
 

@@ -1,5 +1,6 @@
 #pragma once
 #include "Serialization.h"
+#include "WpsProbe.h"
 #include <FS.h>
 #include <SPI.h>
 namespace radar {
@@ -11,6 +12,7 @@ public:
     bool needsDetection(const Observation& observation, const AccessPoint* aggregate, uint64_t nowUs) const;
     bool saveDetection(const Observation& observation, const AccessPoint* aggregate, const Frame& frame,
                        const ScanStats& stats, const char* hardware);
+    bool saveProbe(const WpsProbe& probe, const char* hardware);
     void tick();
     bool busy() const { return phase_ != Phase::Idle; }
     const char* message() const { return message_; }
@@ -47,6 +49,8 @@ private:
     unsigned sequence_ = 0;
     unsigned detectionSequence_ = 0;
     bool detection_ = false;
+    bool probe_ = false;
+    unsigned probeSequence_ = 0;
     bool available_ = false;
     char message_[64] = "SD unavailable";
 };

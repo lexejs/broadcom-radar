@@ -15,6 +15,9 @@ public:
     void clear(); // Call with capture paused.
     ScanStats stats() const;
     const char* error() const { return error_; }
+#if RADAR_WPS_PROBE
+    bool probeCapture(bool enabled, const uint8_t* bssid, const uint8_t* station);
+#endif
 private:
     static void receive(void* buffer, wifi_promiscuous_pkt_type_t type);
     bool check(esp_err_t error);
@@ -30,5 +33,9 @@ private:
     uint8_t channel_ = 1, firstChannel_ = 1, lastChannel_ = 13;
     bool ready_ = false, running_ = false, hopping_ = true;
     const char* error_ = "";
+#if RADAR_WPS_PROBE
+    bool probeCapture_ = false;
+    uint8_t probeBssid_[6]{}, probeStation_[6]{};
+#endif
 };
 }

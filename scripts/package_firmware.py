@@ -20,11 +20,15 @@ def package(source, target, env):
                         (project / "include" / "RadarTypes.h").read_text()).group(1)
     output = project / "dist"
     output.mkdir(exist_ok=True)
-    variant = "BRCM-RDR" if env["PIOENV"] == "cardputer_adv" else "BRCM-RDR-S3"
+    variant = "BRCM-RDR" if env["PIOENV"].startswith("cardputer_adv") else "BRCM-RDR-S3"
+    experimental = env["PIOENV"].endswith("_probe")
+    if experimental:
+        variant += "-T"
     name = f"{variant}-{version}.bin"
     destination = output / name
     shutil.copyfile(binary, destination)
     metadata = {"file": name, "bytes": destination.stat().st_size,
+                "experimental_wps_probe": experimental,
                 "required_aligned_app_partition_bytes": (destination.stat().st_size + 65535) & ~65535,
                 "sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
                 "format": "ESP32-S3 application only; no bootloader or partition table"}

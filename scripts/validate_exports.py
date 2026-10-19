@@ -58,3 +58,34 @@ frame = data[40:]
 assert frame[16:22].hex() == ap["bssid"].replace(":", "").lower()
 assert b"\xdd\x09\x00\x10\x18\x02" in frame
 print("PASS: automatic BRCM JSON/CSV and matching single-frame PCAP with manual capture disabled")
+
+report = json.loads((root / "test-001.json").read_text())
+assert report["mode"] == "experimental-active-wps"
+assert report["implementation_candidate"] == "HOSTAPD_LIKE"
+assert report["reason"] == "EXPLICIT_RESPONSE_UNCALIBRATED"
+assert not report["hardware_calibrated"] and not report["continuation_fragments_sent"]
+assert report["tx_accepted_by_driver"] == 6 and report["cleanup_accepted_by_driver"]
+assert report["declared_wps_message_length"] == 0 and report["trace_dropped"] == 0
+data = (root / "test-001.pcap").read_bytes()
+assert struct.unpack_from("<IHHIIII", data) == (0xA1B2C3D4, 2, 4, 0, 0, 2304, 105)
+offset = 24
+frames = []
+for record in report["records"]:
+    seconds, micros, captured, original = struct.unpack_from("<IIII", data, offset)
+    offset += 16
+    assert captured == record["captured"] <= record["original"] == original
+    assert captured <= report["captured_bytes_per_frame"]
+    packet = data[offset:offset + captured]
+    assert len(packet) == captured
+    if record["direction"] == "TX_DRIVER_ACCEPTED":
+        assert packet[4:10].hex() == report["bssid"].replace(":", "").lower()
+        assert packet[10:16].hex() == report["station"].replace(":", "").lower()
+    frames.append(packet)
+    offset += captured
+assert offset == len(data) and len(frames) == report["pcap_frames"] == 12
+assert frames[1][0] == 0xB0 and frames[3][0] == 0 and frames[-1][0] == 0xC0
+assert frames[3][28:34] == b"\x00\x04Test"
+assert frames[5][32:] == b"\x02\x01\x00\x00"  # EAPOL Start.
+assert frames[9][36:] == bytes.fromhex("02080010fe00372a0000000104030000")
+assert frames[10][36:] == bytes.fromhex("0109000efe00372a000000010600")
+print("PASS: experimental WPS report and all 12 protocol records; one zero-length first fragment, no continuation")

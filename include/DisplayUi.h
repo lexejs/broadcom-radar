@@ -7,10 +7,13 @@ class DisplayUi {
 public:
     bool begin();
     void notify(const char* message);
+#if RADAR_WPS_PROBE
+    void attachProbe(WpsProbe& probe) { probe_ = &probe; }
+#endif
     void tick(AccessPointStore& store, WifiScanner& scanner, Exporter& exporter,
               PcapRing& ring, uint32_t& rejected, uint32_t& malformed, const char* hardware);
 private:
-    enum class Screen { List, Detail, Channel, Help };
+    enum class Screen { List, Detail, Channel, Help, ProbeConfirm, Probe };
     struct Row {
         char text[27]{};
         uint16_t foreground = TFT_WHITE, background = TFT_BLACK;
@@ -32,5 +35,9 @@ private:
     uint32_t lastDraw_ = 0, noticeUntil_ = 0;
     bool resumeAfterExport_ = false;
     char notice_[64] = "";
+#if RADAR_WPS_PROBE
+    WpsProbe* probe_ = nullptr;
+    Observation probeTarget_;
+#endif
 };
 }

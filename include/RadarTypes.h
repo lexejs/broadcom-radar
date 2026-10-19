@@ -1,9 +1,12 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#ifndef RADAR_WPS_PROBE
+#define RADAR_WPS_PROBE 0
+#endif
 
 namespace radar {
-constexpr const char* kFirmwareVersion = "1.0.4";
+constexpr const char* kFirmwareVersion = "1.0.5";
 constexpr size_t kMaxAps = 128;
 constexpr size_t kMaxFrame = 2304;
 constexpr size_t kQueueDepth = 12;

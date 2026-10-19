@@ -38,8 +38,8 @@ bool Exporter::mount() {
     return available_;
 }
 void Exporter::filename(char* path, size_t size, const char* ext, bool partial) const {
-    std::snprintf(path, size, "/broadcom-radar/%s-%03u.%s%s", detection_ ? "brcm" : "scan",
-                  detection_ ? detectionSequence_ : sequence_, ext, partial ? ".part" : "");
+    std::snprintf(path, size, "/broadcom-radar/%s-%03u.%s%s", probe_ ? "test" : detection_ ? "brcm" : "scan",
+                  probe_ ? probeSequence_ : detection_ ? detectionSequence_ : sequence_, ext, partial ? ".part" : "");
 }
 bool Exporter::open(const char* ext) {
     char path[80]; filename(path, sizeof(path), ext, true);
@@ -61,7 +61,7 @@ void Exporter::fail(const char* reason) {
 }
 bool Exporter::start(const AccessPointStore& store, const ScanStats& stats, const PcapRing& ring, const char* hardware) {
     if (busy()) return false;
-    detection_ = false;
+    detection_ = probe_ = false;
     if (!available_ && !mount()) return false;
     if (!nextSequence()) return false;
     store_ = &store; ring_ = &ring; index_ = 0;
@@ -73,7 +73,7 @@ bool Exporter::start(const AccessPointStore& store, const ScanStats& stats, cons
     return true;
 }
 bool Exporter::nextSequence() {
-    auto& sequence = detection_ ? detectionSequence_ : sequence_;
+    auto& sequence = probe_ ? probeSequence_ : detection_ ? detectionSequence_ : sequence_;
     // Never overwrite a prior export, including interrupted .part files.
     while (sequence < 9999) {
         ++sequence; bool exists = false; char path[80];
@@ -98,7 +98,7 @@ bool Exporter::saveDetection(const Observation& observation, const AccessPoint* 
     if (!needsDetection(observation, aggregate, stats.nowUs)) return false;
     // Retry only on a later received advertisement, at most once every five seconds after an SD error.
     retryAfterUs_ = stats.nowUs + 5000000ULL;
-    detection_ = true;
+    detection_ = true; probe_ = false;
     if (!available_ && !mount()) return false;
     if (!nextSequence()) return false;
     AccessPoint single;
@@ -144,6 +144,24 @@ bool Exporter::saveDetection(const Observation& observation, const AccessPoint* 
     retryAfterUs_ = 0;
     std::snprintf(message_, sizeof(message_), "Saved brcm-%03u + PCAP", detectionSequence_);
     return true;
+}
+bool Exporter::saveProbe(const WpsProbe& probe, const char* hardware) {
+    if (busy() || !probe.done()) return false;
+    probe_ = true; detection_ = false;
+    if (!available_ && !mount()) return false;
+    if (!nextSequence()) return false;
+    bool good = open("json");
+    if (good) { FileSink sink(file_); good = writeProbeJson(sink, probe, hardware) && sink.flush(); }
+    file_.flush(); good = good && file_.getWriteError() == 0; file_.close();
+    if (good) good = open("pcap");
+    if (good) {
+        FileSink sink(file_); good = writePcapHeader(sink);
+        for (size_t i = 0; good && i < probe.recordCount(); ++i) good = writeProbePcapFrame(sink, probe.record(i));
+        good = good && sink.flush();
+    }
+    file_.flush(); good = good && file_.getWriteError() == 0; file_.close();
+    if (!good || !publishFile("pcap") || !publishFile("json")) { fail("Test save failed; parts kept"); return false; }
+    std::snprintf(message_, sizeof(message_), "Saved test-%03u + PCAP", probeSequence_); return true;
 }
 void Exporter::tick() {
     if (!busy()) return;
