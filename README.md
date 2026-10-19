@@ -1,23 +1,23 @@
 # Broadcom Radar for M5Stack Cardputer
 
-Portable 2.4 GHz Broadcom Wi-Fi/WPS fingerprint detector for **M5Stack Cardputer ADV** and the **original Cardputer**, installed through M5Launcher. Firmware version: **1.0.11**.
+Portable 2.4 GHz Broadcom Wi-Fi/WPS fingerprint detector for **M5Stack Cardputer ADV** and the **original Cardputer**, installed through M5Launcher. Firmware version: **1.0.12**.
 
 Radar listens to Beacon and already present Probe Response frames, identifies three published Broadcom fingerprints, and shows the evidence on the device. It provides channel hopping or fixed-channel monitoring, a keyboard-driven interface, automatic Broadcom JSON/CSV/PCAP archives and manual scan export to microSD. Passive fingerprints do not establish vulnerability, patch status or safety. Default builds use no active scan, connection or packet-injection APIs. Separate experimental `-T` images add a manual WPS implementation probe using the stock public raw-TX API. The `-C` images test a narrowly scoped driver compatibility path and stop at WSC Start. The new `-F` images use that same path and then submit one empty first fragment to obtain an uncalibrated implementation-family candidate.
 
 ## Ready-to-install files
 
-Local builds generate application images and their SHA-256 manifests under `dist/`; generated files are excluded from source history. Version 1.0.11 has not been published to GitHub.
+Local builds generate application images and their SHA-256 manifests under `dist/`; generated files are excluded from source history. Version 1.0.12 has not been published to GitHub.
 
 | Hardware | Application image | Size |
 | --- | --- | --- |
-| Cardputer ADV (Stamp-S3A) | `BRCM-RDR-1.0.11.bin` | 1,010,848 bytes |
-| Original Cardputer (Stamp-S3) | `BRCM-RDR-S3-1.0.11.bin` | 1,010,944 bytes |
-| ADV, stock WPS probe | `BRCM-RDR-T-1.0.11.bin` | 1,033,968 bytes |
-| Original, stock WPS probe | `BRCM-RDR-S3-T-1.0.11.bin` | 1,034,064 bytes |
-| ADV, transport-only compatibility | `BRCM-RDR-C-1.0.11.bin` | 1,034,704 bytes |
-| Original, transport-only compatibility | `BRCM-RDR-S3-C-1.0.11.bin` | 1,034,800 bytes |
-| ADV, compatible WPS fingerprint | `BRCM-RDR-F-1.0.11.bin` | 1,034,704 bytes |
-| Original, compatible WPS fingerprint | `BRCM-RDR-S3-F-1.0.11.bin` | 1,034,816 bytes |
+| Cardputer ADV (Stamp-S3A) | `BRCM-RDR-1.0.12.bin` | 1,012,224 bytes |
+| Original Cardputer (Stamp-S3) | `BRCM-RDR-S3-1.0.12.bin` | 1,012,320 bytes |
+| ADV, stock WPS probe | `BRCM-RDR-T-1.0.12.bin` | 1,035,424 bytes |
+| Original, stock WPS probe | `BRCM-RDR-S3-T-1.0.12.bin` | 1,035,536 bytes |
+| ADV, transport-only compatibility | `BRCM-RDR-C-1.0.12.bin` | 1,036,176 bytes |
+| Original, transport-only compatibility | `BRCM-RDR-S3-C-1.0.12.bin` | 1,036,272 bytes |
+| ADV, compatible WPS fingerprint | `BRCM-RDR-F-1.0.12.bin` | 1,036,176 bytes |
+| Original, compatible WPS fingerprint | `BRCM-RDR-S3-F-1.0.12.bin` | 1,036,272 bytes |
 
 Filenames include the firmware version from `include/RadarTypes.h`. The adjacent `.bin.json` files contain exact sizes, SHA-256 hashes and required app partition sizes rounded to 64 KiB. These are **application-only** ESP32-S3 images, starting with `0xE9`. They contain no bootloader, partition table, filesystem image or configuration. Use the binary for your hardware: the ADV build explicitly selects the TCA8418 keyboard reader; the original selects the GPIO matrix reader.
 
@@ -33,16 +33,16 @@ All eight images require an existing OTA app slot of at least **1,048,576 bytes*
 
 1. Keep the existing Launcher installed. Before replacing an app, save its original `.bin`, back up that app and its data using the installed Launcher's backup facilities, and preserve `/config.conf` and `/bkp` on the SD card. Keep an off-card copy of important backups. Check the existing boot-to-Launcher/recovery setting before installation.
 2. Open **PMan** or the installed version's partition list. Identify an existing OTA app slot large enough for the `required_aligned_app_partition_bytes` in the selected `.bin.json`. The build enforces a conservative 1.5 MiB maximum, but this is a build guard, not a claim about your device's current free space. The resident Launcher partition must not be selected.
-3. Copy the matching `.bin` to the microSD card, for example `/firmware/BRCM-RDR-1.0.11.bin`. FAT32 on an MBR SDHC card is a conservative choice; the installed Launcher may also support other formats. Insert the card.
+3. Copy the matching `.bin` to the microSD card, for example `/firmware/BRCM-RDR-1.0.12.bin`. FAT32 on an MBR SDHC card is a conservative choice; the installed Launcher may also support other formats. Insert the card.
 4. Enter Launcher, open **SD**, select the `.bin`, then the install action. Choose the existing compatible OTA app slot, with the understanding that this replaces its previous app. Menu wording varies by Launcher version. Decline partition resizing, removal, compaction, formatting and filesystem installation if offered. This application needs no data partition. Stop if an existing slot does not fit.
-5. Start the installed app. The initial screen should show `BRCM-RDR 1.0.11`, its build variant, `RUN`, and a changing channel. Reception is passive; wait through several channel sweeps.
+5. Start the installed app. The initial screen should show `BRCM-RDR 1.0.12`, its build variant, `RUN`, and a changing channel. Reception is passive; wait through several channel sweeps.
 
 **Do not flash `bootloader.bin`, `partitions.bin`, a merged image or a full dump. Do not run erase-flash.** `partitions-build-only.csv` exists solely for linking and size checking; it is never part of the installation package. Direct `pio run -t upload` is deliberately disabled to protect Launcher.
 
 If you already have a raw partition-table export or a CSV describing the actual installed table, this read-only check verifies that the image fits an existing OTA slot:
 
 ```sh
-python3 scripts/check_launcher_partition.py dist/BRCM-RDR-1.0.11.bin /path/to/actual-partitions.bin --label app1
+python3 scripts/check_launcher_partition.py dist/BRCM-RDR-1.0.12.bin /path/to/actual-partitions.bin --label app1
 ```
 
 Use the real OTA partition label. This script does not read or write flash, resize partitions or install anything. Without a real table, only image-format and build-limit checks are possible. Current upstream Launcher uses dynamic partitions; an 8 MB flash chip alone does not establish the available app slot size.
@@ -69,7 +69,9 @@ These procedures have been checked against upstream Launcher documentation and s
 | E | Export JSON/CSV and optional PCAP; automatically pause capture and restore its prior state |
 | M | Choose `HOP` or hold one channel |
 | P | Toggle bounded PCAP capture, clearing the previous PCAP buffer |
-| H | Open or close four-page help, preserving the previous screen and page |
+| H | Open or close five-page help, preserving the previous screen and page |
+| B | Open screen settings: brightness, optional idle timeout, display off |
+| L | Turn the display off; the next press only wakes it |
 | V | Read the full selected SSID or WPS text field; arrows change text pages |
 | D | From Help open scan diagnostics; from a test toggle its diagnostics |
 | F | Cycle display filter: `ALL` -> `WPS` candidates -> `B+W` (Broadcom WPS candidates) |
@@ -80,9 +82,11 @@ The main screen shows firmware version, build variant (`P` passive, `T` stock te
 
 Only the main screen has a bottom keyboard-hint row. The seven named detail pages are SUMMARY, EVIDENCE, IDENTITY, UUID, ACTIVITY and two VENDOR IEs pages. The overview wraps SSIDs onto two rows; **V** opens a snapshot of the full selected bounded text, including escaped binary values. Up/Down select fields on SUMMARY and IDENTITY. Manual text paging keeps complete `\xNN` tokens together. Display shortening is distinct from source truncation, which the text viewer labels `source limited`. The remaining bottom rows contain data or status, with no keyboard footer.
 
-**H** opens four-page help from any screen and returns to the same screen, detail page and selected field. During a test, help does not stop the state machine; Escape closes help first, and another Escape cancels the test. **D** in help opens scan diagnostics, or test diagnostics when help was opened from a test. A chosen channel is displayed separately from the applied mode; an apply failure keeps the menu open. Paused empty lists explicitly say capture is paused. **R** requires a second press within three seconds; another action cancels the pending reset. Files on SD are preserved.
+**H** opens five-page help from any screen and returns to the same screen, detail page and selected field. During a test, help does not stop the state machine; Escape closes help first, and another Escape cancels the test. **D** in help opens scan diagnostics, or test diagnostics when help was opened from a test. A chosen channel is displayed separately from the applied mode; an apply failure keeps the menu open. Paused empty lists explicitly say capture is paused. **R** requires a second press within three seconds; another action cancels the pending reset. Files on SD are preserved.
 
 Since 1.0.10, **F** cycles `ALL` -> `WPS` -> `B+W` -> `ALL`, initially showing all networks. Candidate filters use the same target eligibility check as the manual test: complete data, a known non-hidden SSID, channel 1-13, a valid unicast BSSID and observed WPS. `B+W` additionally requires a Broadcom signature. The main header and footer show the active filter; `AP:2/7` means two visible out of seven stored APs. Incoming observations update membership automatically. An eligible selection is preserved; when it is excluded, selection moves to the first visible AP. An empty result says `No matching networks`, and Enter/T cannot open a hidden row. Filters affect only the displayed list, preserve all collected records and exports, and do not increase the 128-BSSID capacity. Filter changes are disabled during export and test confirmation/execution. Hidden records are not assessed as safe.
+
+Since 1.0.12, **B** opens screen settings from any screen. Brightness steps are 30/50/70/100/150/200/255, initially 100. Auto off is disabled initially; optional timeouts are 30/60/120/300 seconds without keyboard activity. The timer waits during test confirmation, a running test, manual export and screen settings. **L** immediately blanks the display on any screen, including during a test or export. Blanking sets backlight brightness to zero and stops drawing; the LCD controller, CPU, receiver, channel hopping and automatic archives continue. The first key only restores the selected brightness and redraws the current screen; commands are suppressed until all wake keys are released. This prevents wake Enter from starting a test or wake R from clearing data. Held keys prevent automatic blanking. Notifications do not reset inactivity. Screen settings reset on restart. Display blanking does not change the existing radio configuration or establish a measured battery-life improvement.
 
 Only changed rows are transferred to the display, at most twice per second for scan updates and immediately for key presses. Each row is composed in a reusable 240x15 RGB565 canvas (7,200 bytes), then sent without clearing the physical display. DMA completes before the buffer is reused. The existing font is scaled, so no additional font assets are linked. Builds use size optimization, LTO and disabled C++ exceptions. The M5GFX build hook keeps its include-dependent base class consistent across translation units for LTO.
 

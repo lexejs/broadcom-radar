@@ -345,7 +345,7 @@ void uiTests() {
     CHECK(M5Cardputer.Display.lines[8]=="F:ALL S:pause M:CH H:help");
     const auto initialPushes=M5Cardputer.Display.pushes;
     tick(); tick(); CHECK(M5Cardputer.Display.pushes==initialPushes);
-    key("h"); CHECK(M5Cardputer.Display.lines[0]=="HELP 1/4");
+    key("h"); CHECK(M5Cardputer.Display.lines[0]=="HELP 1/5");
     CHECK(M5Cardputer.Display.lines[5].find("filter")!=std::string::npos);
     key("`"); CHECK(M5Cardputer.Display.lines[0].find("BRCM-RDR ")==0);
     key("s"); CHECK(!scanner.stats().running); key("S"); CHECK(scanner.stats().running);
@@ -519,7 +519,7 @@ void uiStateTests() {
     CHECK(shown==expected); key("`");
     key("/"); key("/"); CHECK(M5Cardputer.Display.lines[0]=="3/7 IDENTITY");
     key("."); CHECK(M5Cardputer.Display.backgrounds[2]==TFT_NAVY);
-    key("h"); secondary(); key("/"); CHECK(M5Cardputer.Display.lines[0]=="HELP 2/4");
+    key("h"); secondary(); key("/"); CHECK(M5Cardputer.Display.lines[0]=="HELP 2/5");
     CHECK(M5Cardputer.Display.lines[2]=="WPS: test-ready APs");
     key("`"); CHECK(M5Cardputer.Display.lines[0]=="3/7 IDENTITY");
     CHECK(M5Cardputer.Display.backgrounds[2]==TFT_NAVY);
@@ -576,11 +576,83 @@ void uiStateTests() {
     CHECK(M5Cardputer.Display.lines[2]=="New AP ads dropped: 1");
     CHECK(M5Cardputer.Display.lines[3].find("RX queue drops:")==0); secondary();
 }
+void uiDisplayPowerTests() {
+    mock::files.clear(); mock::sdPresent=true;
+    WifiScanner scanner; CHECK(scanner.begin()); AccessPointStore store;
+    auto bytes=fixedUuid(); auto observation=parse(bytes); store.observe(observation);
+    PcapRing ring; ring.enable(true); Exporter exporter; CHECK(exporter.mount()); DisplayUi ui; CHECK(ui.begin());
+    uint32_t rejected=0,malformed=0;
+    auto tick=[&](uint64_t elapsed=1000) { mock::nowUs+=elapsed; ui.tick(store,scanner,exporter,ring,rejected,malformed,"Cardputer ADV"); M5Cardputer.Keyboard.changed=false; };
+    auto release=[&]() { M5Cardputer.Keyboard.event(""); tick(); };
+    auto key=[&](const char* value) { M5Cardputer.Keyboard.event(value); tick(); release(); };
+    auto enter=[&]() { M5Cardputer.Keyboard.event(""); M5Cardputer.Keyboard.state.enter=true; tick(); release(); };
+    release(); tick(310000000); CHECK(M5Cardputer.Display.brightness==100);
+    key("b"); CHECK(M5Cardputer.Display.lines[0]=="SCREEN SETTINGS");
+    CHECK(M5Cardputer.Display.lines[3]=="Auto off: disabled");
+    key(","); CHECK(M5Cardputer.Display.brightness==70);
+    key("."); key("/"); CHECK(M5Cardputer.Display.lines[3]=="Auto off: 30 seconds");
+    tick(31000000); CHECK(M5Cardputer.Display.brightness==70); // Settings stay visible.
+    key("h"); key("h"); CHECK(M5Cardputer.Display.lines[0]=="SCREEN SETTINGS");
+    key("`"); CHECK(M5Cardputer.Display.lines[0].find("BRCM-RDR")==0);
+    const auto calls=mock::calls.size();
+    M5Cardputer.Keyboard.event("l"); tick();
+    CHECK(M5Cardputer.Display.brightness==0 && mock::calls.size()==calls);
+    const auto pushes=M5Cardputer.Display.pushes;
+    tick(31000000); CHECK(M5Cardputer.Display.brightness==0); // Holding L does not wake it again.
+    release(); tick(); CHECK(M5Cardputer.Display.pushes==pushes);
+    CHECK(scanner.stats().running && mock::enabled);
+    // RX, channel hopping and automatic SD archives continue with the backlight off.
+    wifi_promiscuous_pkt_t packet{}; packet.rx_ctrl={0,uint16_t(bytes.size()+4),-61,6};
+    std::memcpy(packet.payload,bytes.data(),bytes.size()); mock::callback(&packet,WIFI_PKT_MGMT);
+    Frame captured; CHECK(scanner.pop(captured)); CHECK(captured.length==bytes.size()); ring.add(captured);
+    Observation received; CHECK(parseAdvertisement(captured.bytes,captured.length,captured.rssi,captured.channel,captured.timestampUs,received));
+    const auto* aggregate=store.observe(received);
+    CHECK(exporter.saveDetection(received,aggregate,captured,scanner.stats(),"Cardputer ADV"));
+    ui.notify(exporter.message()); scanner.tick(); tick();
+    CHECK(M5Cardputer.Display.brightness==0 && M5Cardputer.Display.pushes==pushes);
+    CHECK(mock::files.count("/broadcom-radar/brcm-001.json") && mock::files.count("/broadcom-radar/brcm-001.pcap"));
+    const auto files=mock::files.size(); key("e"); // Wake E cannot start an export.
+    CHECK(M5Cardputer.Display.brightness==70 && !exporter.busy() && mock::files.size()==files);
+    CHECK(M5Cardputer.Display.lines[0].find("BRCM-RDR")==0);
+    key("l"); enter(); CHECK(M5Cardputer.Display.lines[0].find("BRCM-RDR")==0);
+    enter(); CHECK(M5Cardputer.Display.lines[0]=="1/7 SUMMARY"); key("/");
+    key("b"); key("`"); CHECK(M5Cardputer.Display.lines[0]=="2/7 EVIDENCE");
+    key("l"); key("/"); CHECK(M5Cardputer.Display.lines[0]=="2/7 EVIDENCE");
+    key("/"); CHECK(M5Cardputer.Display.lines[0]=="3/7 IDENTITY"); key("`");
+    key("l"); key("r"); CHECK(store.size()==1); key("r"); CHECK(store.size()==1);
+    key("b"); key(","); // Disable auto off; this was the previously selected timeout field.
+    CHECK(M5Cardputer.Display.lines[3]=="Auto off: disabled"); key("`");
+    tick(310000000); CHECK(M5Cardputer.Display.brightness==70);
+    key("b"); key("/"); key("`");
+    // Incoming advertisements and notifications do not count as keyboard activity.
+    tick(15000000); store.observe(received); ui.notify("Saved brcm-002 + PCAP"); tick(16000000);
+    CHECK(M5Cardputer.Display.brightness==0); key("x");
+    // Export continues while manually blanked and resumes capture without lighting the screen.
+    key("e"); CHECK(exporter.busy()); key("l");
+    while(exporter.busy()) tick();
+    CHECK(M5Cardputer.Display.brightness==0 && scanner.stats().running);
+    CHECK(mock::files.count("/broadcom-radar/scan-001.json"));
+    key("x"); CHECK(M5Cardputer.Display.brightness==70);
+    // The settings action can blank the screen, and wake Enter cannot trigger it again.
+    key("b"); key("."); enter(); CHECK(M5Cardputer.Display.brightness==0);
+    enter(); CHECK(M5Cardputer.Display.brightness==70 && M5Cardputer.Display.lines[0]=="SCREEN SETTINGS");
+    key("b");
+    // The inactivity calculation remains valid across the 32-bit millisecond wrap.
+    mock::nowUs=(uint64_t(UINT32_MAX)-10000)*1000;
+    key("b"); key("b"); tick(31000000); CHECK(M5Cardputer.Display.brightness==0);
+    key("x"); key("h"); key("d"); CHECK(M5Cardputer.Display.lines[0]=="SCAN DIAGNOSTICS");
+    key("b"); key("h"); CHECK(M5Cardputer.Display.lines[0]=="HELP 5/5");
+    key("d"); CHECK(M5Cardputer.Display.lines[0]=="SCREEN SETTINGS");
+    key("b"); CHECK(M5Cardputer.Display.lines[0]=="SCAN DIAGNOSTICS");
+    key("`"); CHECK(M5Cardputer.Display.lines[0].find("BRCM-RDR")==0);
+    CHECK(M5Cardputer.Display.boundsOk && M5Cardputer.Display.directClears==0);
+    release();
+}
 }
 int main(int argc,char** argv) {
     try {
         parserTests(); storeTests(); scannerTests(); exportTests(argc>1?argv[1]:nullptr);
-        detectionTests(argc>1?argv[1]:nullptr); uiTests(); uiSortingTests(); uiFilterTests(); uiStateTests(); corruptionTests();
+        detectionTests(argc>1?argv[1]:nullptr); uiTests(); uiSortingTests(); uiFilterTests(); uiStateTests(); uiDisplayPowerTests(); corruptionTests();
         std::cout << "PASS: " << checks << " checks; 50,000 deterministic corrupt frames\n";
     } catch(const std::exception& e) { std::cerr << "FAIL: " << e.what() << '\n'; return 1; }
 }

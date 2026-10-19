@@ -18,7 +18,7 @@
 #endif
 
 namespace radar {
-constexpr const char* kFirmwareVersion = "1.0.11";
+constexpr const char* kFirmwareVersion = "1.0.12";
 constexpr const char* kFirmwareVariant = RADAR_WPS_PROBE ?
     (RADAR_DRIVER_COMPAT ? (RADAR_TRANSPORT_ONLY ? "C" : "F") : "T") : "P";
 constexpr size_t kMaxAps = 128;

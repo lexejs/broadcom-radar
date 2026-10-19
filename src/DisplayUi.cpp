@@ -4,7 +4,9 @@
 #include <cstring>
 namespace radar {
 namespace {
-constexpr unsigned kPages = 7, kHelpPages = 4;
+constexpr unsigned kPages = 7, kHelpPages = 5;
+constexpr uint8_t kBrightness[] = {30, 50, 70, 100, 150, 200, 255};
+constexpr uint16_t kIdleSeconds[] = {0, 30, 60, 120, 300};
 constexpr int kRowHeight = 15;
 constexpr size_t kVisibleNetworks = 5, kColumns = 26;
 constexpr const char* kDetectionBadges[] = {"BRCM+WPS", "BRCM", "WPS", "NONE", "WAIT"};
@@ -69,7 +71,8 @@ const char* reasonLabel(ProbeReason reason, ProbeResponse response) {
 }
 bool DisplayUi::begin() {
     M5Cardputer.Display.setRotation(1);
-    M5Cardputer.Display.setBrightness(100);
+    M5Cardputer.Display.setBrightness(kBrightness[brightnessChoice_]);
+    lastInput_ = millis();
     canvas_.setColorDepth(16); canvas_.setPsram(false);
     if (!canvas_.createSprite(240, kRowHeight)) return false;
     canvas_.setTextFont(1); canvas_.setTextSize(1.5f); canvas_.setTextWrap(false);
@@ -236,7 +239,7 @@ void DisplayUi::help(const ScanStats& s, const PcapRing& ring) {
 #endif
         line(6, "R keeps files on SD");
         line(7, "PCAP: %s; last %u frames", ring.enabled() ? "ON" : "OFF", unsigned(kPcapDepth));
-    } else {
+    } else if (helpPage_ == 3) {
         line(1, "Details: Up/Down field"); line(2, "V: read full selected text");
 #if RADAR_WPS_PROBE
         line(3, "T: review one-AP test"); line(4, "Enter: start Esc: cancel");
@@ -246,6 +249,11 @@ void DisplayUi::help(const ScanStats& s, const PcapRing& ring) {
         line(5, "No active tests available"); line(6, "No vulnerability verdict");
 #endif
         line(7, "Capture is %s", s.running ? "running" : "paused");
+    } else {
+        line(1, "B: screen settings"); line(2, "L: turn display off");
+        line(3, "Any key: wake only"); line(4, "Up/Down: choose setting");
+        line(5, "Left/Right: change value"); line(6, "Enter: change / turn off");
+        line(7, "Idle timer: keyboard only");
     }
     line(8, "BRCM-RDR %s %s", kFirmwareVersion, kFirmwareVariant);
 }
@@ -306,6 +314,19 @@ void DisplayUi::draw(const AccessPointStore& store, const ScanStats& s, const Ex
     if (screen_ == Screen::Detail && selected_ < orderedCount_) detail(store.at(ordered_[selected_]), s);
     else if (screen_ == Screen::Text) textPage();
     else if (screen_ == Screen::Help) help(s, ring);
+    else if (screen_ == Screen::Display) {
+        line(0, "SCREEN SETTINGS"); foreground_ = TFT_WHITE; background_ = TFT_BLACK;
+        line(1, "Settings reset on restart");
+        background_ = displayField_ == 0 ? TFT_NAVY : TFT_BLACK;
+        line(2, "Brightness: %u / 255", kBrightness[brightnessChoice_]);
+        background_ = displayField_ == 1 ? TFT_NAVY : TFT_BLACK;
+        if (idleChoice_) line(3, "Auto off: %u seconds", kIdleSeconds[idleChoice_]);
+        else line(3, "Auto off: disabled");
+        background_ = displayField_ == 2 ? TFT_NAVY : TFT_BLACK;
+        line(4, "Turn display off"); background_ = TFT_BLACK;
+        line(6, "Any key wakes the display"); line(7, "Capture and saves continue");
+        line(8, "Timer waits during tests");
+    }
     else if (screen_ == Screen::Diagnostics) {
         line(0, "SCAN DIAGNOSTICS"); foreground_ = TFT_WHITE; background_ = TFT_BLACK;
         line(1, "APs stored: %u/%u", unsigned(store.size()), unsigned(kMaxAps));
@@ -362,6 +383,15 @@ void DisplayUi::notify(const char* message) {
     std::snprintf(notice_, sizeof(notice_), "%s", message);
     noticeUntil_ = millis() + 5000; dirty_ = true;
 }
+void DisplayUi::blankScreen() {
+    M5Cardputer.Display.waitDMA(); M5Cardputer.Display.setBrightness(0);
+    displayOn_ = false; clearUntil_ = 0;
+}
+void DisplayUi::wakeScreen() {
+    displayOn_ = true;
+    M5Cardputer.Display.setBrightness(kBrightness[brightnessChoice_]);
+    firstDraw_ = dirty_ = true;
+}
 void DisplayUi::scannerError(const WifiScanner& scanner) {
     seenScanErrors_ = scanner.errorCount();
     std::snprintf(scannerError_, sizeof(scannerError_), "Scan: %s", scanner.error());
@@ -381,7 +411,8 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
     if (scanner.errorCount() != seenScanErrors_) scannerError(scanner);
     if (clearUntil_ && int32_t(clearUntil_ - millis()) <= 0) { clearUntil_ = 0; dirty_ = true; }
     updateOrder(store);
-    const Screen content = screen_ == Screen::Help ? helpReturn_ : screen_;
+    Screen content = screen_ == Screen::Help ? helpReturn_ : screen_;
+    if (content == Screen::Display) content = displayReturn_;
 #if RADAR_WPS_PROBE
     if (probe_ && content == Screen::ProbeConfirm) {
         for (size_t i = 0; i < store.size(); ++i) if (!std::memcmp(store.at(i).info.bssid, probeTarget_.bssid, 6)) {
@@ -392,7 +423,13 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
     (void)content;
 #endif
     auto& keyboard = M5Cardputer.Keyboard;
-    if (keyboard.isChange() && keyboard.isPressed()) {
+    const bool keysChanged = keyboard.isChange(), keyDown = keyboard.isPressed();
+    if (!keyDown) consumeWakeKey_ = false;
+    else lastInput_ = millis();
+    if (!displayOn_ && keyDown && !consumeWakeKey_) {
+        wakeScreen(); consumeWakeKey_ = true; clearUntil_ = 0;
+    }
+    if (keysChanged && keyDown && !consumeWakeKey_) {
         dirty_ = true;
         const auto& keys = keyboard.keysState();
         const bool up = keys.up || keyboard.isKeyPressed(';'), down = keys.down || keyboard.isKeyPressed('.');
@@ -402,15 +439,23 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
         const bool resetKey = pressed('r') && keys.word.size() == 1 && !up && !down && !left && !right && !esc && !keys.enter;
         const bool clearing = resetKey && screen_ == Screen::List && !exporter.busy();
         if (!clearing) clearUntil_ = 0;
-        if (pressed('h')) {
+        if (pressed('l')) { blankScreen(); consumeWakeKey_ = true; }
+        else if (pressed('b')) {
+            if (screen_ == Screen::Display) screen_ = displayReturn_;
+            else if (screen_ == Screen::Help && helpReturn_ == Screen::Display) screen_ = Screen::Display;
+            else { displayReturn_ = screen_ == Screen::Help ? helpReturn_ : screen_; screen_ = Screen::Display; }
+        } else if (pressed('h')) {
             if (screen_ == Screen::Help) screen_ = helpReturn_;
-            else { helpReturn_ = screen_; helpPage_ = 0; screen_ = Screen::Help; }
+            else { helpReturn_ = screen_; helpPage_ = screen_ == Screen::Display ? kHelpPages - 1 : 0; screen_ = Screen::Help; }
         } else if (screen_ == Screen::Help) {
             if (esc) screen_ = helpReturn_;
             else if (pressed('d')) {
+                if (helpReturn_ == Screen::Display) screen_ = Screen::Display;
 #if RADAR_WPS_PROBE
-                if (helpReturn_ == Screen::Probe && probe_) { screen_ = Screen::Probe; probeDetails_ = true; }
+                else if (helpReturn_ == Screen::Probe && probe_) { screen_ = Screen::Probe; probeDetails_ = true; }
                 else if (helpReturn_ != Screen::ProbeConfirm)
+#else
+                else
 #endif
                 { if (helpReturn_ != Screen::Diagnostics) diagnosticsReturn_ = helpReturn_; screen_ = Screen::Diagnostics; }
             } else if (left || up) helpPage_ = (helpPage_ + kHelpPages - 1) % kHelpPages;
@@ -436,7 +481,24 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
             }
         }
 #endif
-        else if (screen_ == Screen::Text) {
+        else if (screen_ == Screen::Display) {
+            if (esc) screen_ = displayReturn_;
+            else {
+                if (up) displayField_ = (displayField_ + 2) % 3;
+                if (down) displayField_ = (displayField_ + 1) % 3;
+                if (left || right || keys.enter) {
+                    if (displayField_ == 0) {
+                        constexpr unsigned count = sizeof(kBrightness) / sizeof(kBrightness[0]);
+                        if (left) { if (brightnessChoice_) --brightnessChoice_; }
+                        else if (brightnessChoice_ + 1 < count) ++brightnessChoice_;
+                        M5Cardputer.Display.setBrightness(kBrightness[brightnessChoice_]);
+                    } else if (displayField_ == 1) {
+                        constexpr unsigned count = sizeof(kIdleSeconds) / sizeof(kIdleSeconds[0]);
+                        idleChoice_ = (idleChoice_ + (left ? count - 1 : 1)) % count;
+                    } else if (keys.enter) { blankScreen(); consumeWakeKey_ = true; }
+                }
+            }
+        } else if (screen_ == Screen::Text) {
             if (esc) screen_ = Screen::Detail;
             else if (left || up) { if (textPage_) --textPage_; }
             else if (right || down || keys.enter) ++textPage_;
@@ -507,7 +569,13 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
             }
         }
     }
-    if (dirty_ || millis() - lastDraw_ >= 500) {
+    bool keepVisible = exporting || exporter.busy() || screen_ == Screen::Display;
+#if RADAR_WPS_PROBE
+    keepVisible |= probe_ && (content == Screen::ProbeConfirm || probe_->busy());
+#endif
+    if (keepVisible) lastInput_ = millis();
+    if (displayOn_ && !keepVisible && idleChoice_ && uint32_t(millis() - lastInput_) >= kIdleSeconds[idleChoice_] * 1000u) blankScreen();
+    if (displayOn_ && (dirty_ || millis() - lastDraw_ >= 500)) {
         auto stats = scanner.stats(); stats.rejected = rejected; stats.malformed = malformed;
         draw(store, stats, exporter, ring); lastDraw_ = millis(); dirty_ = false;
     }

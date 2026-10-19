@@ -335,10 +335,33 @@ void uiResultTests() {
     CHECK(M5Cardputer.Display.lines[5]=="Capture paused; return");
     CHECK(M5Cardputer.Display.lines[6]=="No packets sent"); secondary();
 }
+void uiDisplayWakeTests() {
+    WifiScanner scanner; CHECK(scanner.begin()); AccessPointStore store; store.observe(target(advertisement()));
+    WpsProbe probe; Exporter exporter; PcapRing ring; DisplayUi ui; CHECK(ui.begin()); ui.attachProbe(probe);
+    uint32_t rejected=0,malformed=0;
+    auto tick=[&](uint64_t elapsed=1000) { mock::nowUs+=elapsed; ui.tick(store,scanner,exporter,ring,rejected,malformed,"Cardputer ADV"); M5Cardputer.Keyboard.changed=false; };
+    auto release=[&]() { M5Cardputer.Keyboard.event(""); tick(); };
+    auto key=[&](const char* value) { M5Cardputer.Keyboard.event(value); tick(); release(); };
+    auto enter=[&]() { M5Cardputer.Keyboard.event(""); M5Cardputer.Keyboard.state.enter=true; tick(); release(); };
+    release(); key("b"); key("."); key("/"); key("`"); // Optional 30-second timer.
+    key("t"); tick(31000000); CHECK(M5Cardputer.Display.brightness==100 && !probe.busy());
+    key("b"); key("h"); key("h"); key("b");
+    CHECK(M5Cardputer.Display.lines[0]=="EXPERIMENTAL WPS TEST");
+    const auto transmissions=mock::transmitted.size();
+    key("l"); enter(); CHECK(M5Cardputer.Display.brightness==100 && !probe.busy());
+    CHECK(mock::transmitted.size()==transmissions); enter(); CHECK(probe.requested());
+    key("b"); tick(31000000); key("b");
+    CHECK(probe.requested() && M5Cardputer.Display.brightness==100);
+    key("l"); key("`"); CHECK(probe.busy()); // Wake Escape cannot cancel the running test.
+    key("`"); CHECK(probe.done() && probe.result().reason==ProbeReason::Cancelled);
+    CHECK(M5Cardputer.Display.brightness==100); tick(31000000); CHECK(M5Cardputer.Display.brightness==0);
+    key("e"); CHECK(!exporter.probeSaved(probe)); // Wake E cannot write another report.
+    CHECK(M5Cardputer.Display.brightness==100 && M5Cardputer.Display.boundsOk);
+}
 }
 int main(int argc, char** argv) {
     try {
-        protocolTests(argc>1?argv[1]:nullptr); transportTests(); uiTests(); blockedStartUiTests(); uiResultTests();
+        protocolTests(argc>1?argv[1]:nullptr); transportTests(); uiTests(); blockedStartUiTests(); uiResultTests(); uiDisplayWakeTests();
         std::cout<<"PASS: "<<checks<<" experimental WPS checks; simulated responses only, not RF calibration\n";
     } catch(const std::exception& e) { std::cerr<<"FAIL: "<<e.what()<<'\n'; return 1; }
 }

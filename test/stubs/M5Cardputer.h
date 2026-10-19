@@ -11,11 +11,12 @@ struct FakeDisplay {
     int row=0;
     bool boundsOk=true;
     unsigned directClears=0, pushes=0;
+    int brightness = -1;
     bool pendingDma=false;
     std::vector<int> backgrounds = std::vector<int>(9, TFT_BLACK);
     std::vector<int> foregrounds = std::vector<int>(9, TFT_WHITE);
     void setRotation(int) {} void setTextFont(int) {} void setTextSize(int) {}
-    void setTextWrap(bool) {} void setBrightness(int) {} void startWrite() {} void endWrite() {}
+    void setTextWrap(bool) {} void setBrightness(int value) { brightness=value; } void startWrite() {} void endWrite() {}
     void fillScreen(int) { ++directClears; lines.clear(); }
     void setTextColor(int,int) {}
     void waitDMA() { pendingDma=false; }
@@ -54,7 +55,7 @@ struct FakeKeyboard {
     } state;
     bool changed=false;
     bool isChange() { return changed; }
-    bool isPressed() { return changed; }
+    bool isPressed() { return state.up || state.down || state.left || state.right || state.esc || state.backspace || state.enter || !state.word.empty(); }
     State& keysState() { return state; }
     bool isKeyPressed(char c) { for(auto key:state.word) if(key==c) return true; return false; }
     void event(const std::string& text) { state={};state.word.assign(text.begin(),text.end());changed=true; }
