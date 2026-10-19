@@ -52,8 +52,13 @@ void setup() {
                   RADAR_WPS_PROBE ? "experimental manual WPS probe" : "passive-only", ESP.getFreeHeap());
     if (!scannerReady) {
         M5Cardputer.Display.fillScreen(TFT_BLACK);
+        M5Cardputer.Display.setTextFont(1);
+        M5Cardputer.Display.setTextSize(1.5f);
+        M5Cardputer.Display.setTextWrap(true);
         M5Cardputer.Display.setCursor(0, 0);
-        M5Cardputer.Display.printf("BROADCOM RADAR\n%s\nRestart to retry", displayReady ? scanner.error() : "Display buffer unavailable");
+        M5Cardputer.Display.printf("BRCM-RDR %s %s\n\n%s\n%s\n\nRestart to retry", radar::kFirmwareVersion,
+                                  radar::kFirmwareVariant, displayReady ? "Wi-Fi init failed" : "Display init failed",
+                                  displayReady ? scanner.error() : "Display buffer unavailable");
     }
 }
 void loop() {

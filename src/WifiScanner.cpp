@@ -12,6 +12,7 @@ WifiScanner* WifiScanner::instance_ = nullptr;
 bool WifiScanner::check(esp_err_t err) {
     if (err == ESP_OK) return true;
     error_ = esp_err_to_name(err);
+    ++errorCount_;
     return false;
 }
 bool WifiScanner::begin() {

@@ -228,7 +228,7 @@ void uiTests() {
     key("f"); CHECK(M5Cardputer.Display.lines[8].find("F:WPS")!=std::string::npos);
     key("t"); CHECK(!probe.busy()); CHECK(M5Cardputer.Display.lines[0]=="EXPERIMENTAL WPS TEST");
     CHECK(M5Cardputer.Display.lines[2].find("02:00:00:00:00:01")!=std::string::npos);
-    key("`"); CHECK(!probe.busy()); CHECK(M5Cardputer.Display.lines[0]=="BROADCOM RADAR TEST");
+    key("`"); CHECK(!probe.busy()); CHECK(M5Cardputer.Display.lines[0].find("BRCM-RDR ")==0);
     key("t"); key("r"); key("f"); CHECK(store.size()==1 && !probe.busy());
     M5Cardputer.Keyboard.event(""); M5Cardputer.Keyboard.state.enter=true; tick(); CHECK(probe.requested());
     key("s"); key("f"); CHECK(scanner.stats().running); key("`"); CHECK(probe.done() && probe.result().reason==ProbeReason::Cancelled);
@@ -258,12 +258,87 @@ void blockedStartUiTests() {
     store.clear(); auto hidden=beacon({}); proprietary(hidden); Data version; tlv(version,0x104a,{0x10}); wps(hidden,version);
     store.observe(target(hidden)); key("`"); key("t"); enter();
     CHECK(!probe.busy() && M5Cardputer.Display.lines[4]=="Hidden SSID");
-    key("`"); CHECK(M5Cardputer.Display.lines[0]=="BROADCOM RADAR TEST");
+    key("`"); CHECK(M5Cardputer.Display.lines[0].find("BRCM-RDR ")==0);
+}
+void uiResultTests() {
+    mock::files.clear(); mock::sdPresent=true; mock::result=ESP_OK;
+    WifiScanner scanner; CHECK(scanner.begin()); AccessPointStore store; store.observe(target(advertisement()));
+    WpsProbe probe; Exporter exporter; CHECK(exporter.mount()); PcapRing ring; DisplayUi ui; CHECK(ui.begin()); ui.attachProbe(probe);
+    uint32_t rejected=0,malformed=0;
+    auto tick=[&]() { mock::nowUs+=600000; ui.tick(store,scanner,exporter,ring,rejected,malformed,"Cardputer ADV"); M5Cardputer.Keyboard.changed=false; };
+    auto key=[&](const char* text) { M5Cardputer.Keyboard.event(text); tick(); };
+    auto enter=[&]() { M5Cardputer.Keyboard.event(""); M5Cardputer.Keyboard.state.enter=true; tick(); };
+    auto secondary=[&]() {
+        CHECK(M5Cardputer.Display.lines[8].find("Esc:")==std::string::npos);
+        CHECK(M5Cardputer.Display.lines[8].find("E:")==std::string::npos);
+        CHECK(M5Cardputer.Display.lines[8].find("Enter:")==std::string::npos);
+        CHECK(M5Cardputer.Display.boundsOk);
+    };
+    enter(); key("/"); key("/"); key("t"); secondary();
+    key("h"); key("s"); CHECK(scanner.stats().running); key("`");
+    CHECK(M5Cardputer.Display.lines[0]=="EXPERIMENTAL WPS TEST");
+    key("`"); CHECK(M5Cardputer.Display.lines[0]=="3/7 IDENTITY");
+    key("t"); enter(); CHECK(probe.requested());
+    probe.begin(station,mock::nowUs); tick();
+    CHECK(M5Cardputer.Display.lines[3]=="Checking fresh AP data"); secondary();
+    key("h"); key("s"); key("f"); CHECK(probe.busy() && scanner.stats().running);
+    // A test completes while Help is open; closing Help returns to its current result.
+    probe.cancel(mock::nowUs); probe.startRestoration(true,true,mock::nowUs); probe.completeReport(true);
+    CHECK(exporter.saveProbe(probe,"Cardputer ADV"));
+    key("h"); CHECK(M5Cardputer.Display.lines[3]=="TEST CANCELLED"); secondary();
+    CHECK(M5Cardputer.Display.lines[6]=="Scan: resumed; RX unseen");
+    const auto fileCount=mock::files.size(); key("e"); CHECK(mock::files.size()==fileCount);
+    key("d"); CHECK(M5Cardputer.Display.lines[0]=="TEST DIAGNOSTICS"); secondary();
+    key("`"); CHECK(M5Cardputer.Display.lines[0]=="WPS TEST RESULT");
+    // A successful explicit reply remains an uncalibrated candidate, with its own report.
+    entry(probe); probe.receive(raw(expanded(9,6))); transmit(probe);
+    probe.startRestoration(true,true,mock::nowUs); probe.completeReport(true); CHECK(exporter.saveProbe(probe,"Cardputer ADV")); tick();
+    CHECK(M5Cardputer.Display.lines[3]=="Candidate: hostapd-like");
+    CHECK(M5Cardputer.Display.lines[4]=="Reply: WPS fragment ACK");
+    CHECK(M5Cardputer.Display.lines[5]=="Uncalibrated; not proof");
+    CHECK(M5Cardputer.Display.lines[8]=="JSON + PCAP saved");
+    const auto report=M5Cardputer.Display.lines[7];
+    auto stats=scanner.stats(); const auto& ap=store.at(0); const auto bytes=advertisement();
+    CHECK(exporter.saveDetection(ap.info,&ap,raw(bytes),stats,"Cardputer ADV")); tick();
+    CHECK(std::string(exporter.message()).find("brcm-")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[7]==report);
+    probe.startRestoration(true,true,mock::nowUs); nowUs=mock::nowUs;
+    probe.receive(raw(advertisement())); probe.completeReport(true); tick();
+    CHECK(M5Cardputer.Display.lines[6]=="Scan: resumed; RX seen");
+    probe.startRestoration(true,false,mock::nowUs); probe.completeReport(true); tick();
+    CHECK(M5Cardputer.Display.lines[6]=="Scan: restored paused");
+    // Attempts cancelled before begin both have startedUs=0 but cannot share report state.
+    CHECK(probe.request(target(advertisement()))); const auto attempt=probe.attemptId(); probe.cancel(mock::nowUs); probe.completeReport(false);
+    CHECK(probe.result().startedUs==0 && !exporter.probeSaved(probe));
+    mock::failWrite=true; CHECK(!exporter.saveProbe(probe,"Cardputer ADV")); tick();
+    CHECK(M5Cardputer.Display.lines[6]=="Scan: restore FAILED");
+    CHECK(M5Cardputer.Display.lines[7].find("Test save failed")==0);
+    CHECK(M5Cardputer.Display.lines[8]=="Report not saved yet");
+    mock::failWrite=false; key("e"); CHECK(exporter.probeSaved(probe));
+    CHECK(M5Cardputer.Display.lines[6]=="Scan: restore FAILED");
+    CHECK(M5Cardputer.Display.lines[8]=="JSON + PCAP saved");
+    const auto savedCount=mock::files.size(); key("e"); CHECK(mock::files.size()==savedCount);
+    CHECK(probe.request(target(advertisement()))); probe.cancel(mock::nowUs); probe.completeReport(true);
+    CHECK(probe.attemptId()!=attempt && probe.result().startedUs==0);
+    CHECK(!exporter.probeSaved(probe)); CHECK(std::string(exporter.probeMessage(probe))=="Report: pending");
+    // Esc closes Help first, then cancels the still-running test.
+    CHECK(probe.request(target(advertisement()))); probe.begin(station,mock::nowUs);
+    key("h"); key("`"); CHECK(probe.busy()); key("`"); CHECK(probe.done());
+    key("`"); CHECK(M5Cardputer.Display.lines[0]=="3/7 IDENTITY");
+    // Unavailable targets show their real reason, with no misleading promise to wait.
+    key("`"); store.clear(); auto invalid=target(advertisement()); invalid.channel=14; store.observe(invalid);
+    key("t"); CHECK(M5Cardputer.Display.lines[4]=="Unsupported channel");
+    CHECK(M5Cardputer.Display.lines[5]=="Supported channels: 1-13"); secondary();
+    key("`"); store.clear(); auto hidden=beacon({}); proprietary(hidden); store.observe(target(hidden));
+    CHECK(scanner.setRunning(false)); key("t");
+    CHECK(M5Cardputer.Display.lines[1]=="<hidden>");
+    CHECK(M5Cardputer.Display.lines[5]=="Capture paused; return");
+    CHECK(M5Cardputer.Display.lines[6]=="No packets sent"); secondary();
 }
 }
 int main(int argc, char** argv) {
     try {
-        protocolTests(argc>1?argv[1]:nullptr); transportTests(); uiTests(); blockedStartUiTests();
+        protocolTests(argc>1?argv[1]:nullptr); transportTests(); uiTests(); blockedStartUiTests(); uiResultTests();
         std::cout<<"PASS: "<<checks<<" experimental WPS checks; simulated responses only, not RF calibration\n";
     } catch(const std::exception& e) { std::cerr<<"FAIL: "<<e.what()<<'\n'; return 1; }
 }

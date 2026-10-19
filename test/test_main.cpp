@@ -345,14 +345,14 @@ void uiTests() {
     CHECK(M5Cardputer.Display.lines[8]=="F:ALL S:pause M:CH H:help");
     const auto initialPushes=M5Cardputer.Display.pushes;
     tick(); tick(); CHECK(M5Cardputer.Display.pushes==initialPushes);
-    key("h"); CHECK(M5Cardputer.Display.lines[0]=="KEYBOARD HELP");
-    CHECK(M5Cardputer.Display.lines[5].find("save JSON")!=std::string::npos);
-    key("`"); CHECK(M5Cardputer.Display.lines[0]=="BROADCOM RADAR");
+    key("h"); CHECK(M5Cardputer.Display.lines[0]=="HELP 1/4");
+    CHECK(M5Cardputer.Display.lines[5].find("filter")!=std::string::npos);
+    key("`"); CHECK(M5Cardputer.Display.lines[0].find("BRCM-RDR ")==0);
     key("s"); CHECK(!scanner.stats().running); key("S"); CHECK(scanner.stats().running);
     M5Cardputer.Keyboard.event("");M5Cardputer.Keyboard.state.enter=true;tick();
-    CHECK(M5Cardputer.Display.lines[0].find("AP INFO 1/7")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[0].find("1/7 SUMMARY")!=std::string::npos);
     M5Cardputer.Keyboard.event("");M5Cardputer.Keyboard.state.right=true;tick();
-    CHECK(M5Cardputer.Display.lines[2].find("WHY:")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[2].find("Observed:")!=std::string::npos);
     for(unsigned page=2;page<7;++page) {
         key("/"); CHECK(M5Cardputer.Display.lines[0].find(std::to_string(page+1)+"/7")!=std::string::npos);
     }
@@ -368,8 +368,8 @@ void uiTests() {
     for(unsigned i=0;i<50 && exporter.busy();++i) tick();
     CHECK(!exporter.busy() && scanner.stats().running);
     key("s");key("e");while(exporter.busy())tick();CHECK(!scanner.stats().running);
-    key("r");CHECK(store.size()==0 && rejected==0 && malformed==0);
-    CHECK(M5Cardputer.Display.lines[4]=="Listening for networks...");
+    key("r");key("r");CHECK(store.size()==0 && rejected==0 && malformed==0);
+    CHECK(M5Cardputer.Display.lines[4]=="Scan paused; no networks");
     CHECK(M5Cardputer.Display.lines[3].empty());
     for(unsigned i=1;i<=6;++i) store.observe(parse(beacon(text("Network-"+std::to_string(i)),i)));
     key("."); key("."); key("."); key("."); key(".");
@@ -427,7 +427,7 @@ void uiSortingTests() {
     CHECK(M5Cardputer.Display.lines[3].find("BRCM+WPS Waiting")!=std::string::npos);
     CHECK(M5Cardputer.Display.lines[7].find(">WPS      With-WPS")!=std::string::npos);
     enter(); CHECK(M5Cardputer.Display.lines[1]=="With-WPS");
-    key("r"); CHECK(store.size()==0);
+    key("r"); key("r"); CHECK(store.size()==0);
     store.observe(parse(beacon(text("Plain"),2))); store.observe(parse(first)); tick();
     CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS Broadcom-A")!=std::string::npos);
     CHECK(M5Cardputer.Display.boundsOk);
@@ -473,7 +473,7 @@ void uiFilterTests() {
     key("f"); key("f"); store.clear(); store.observe(parse(beacon(text("Plain"),1))); tick();
     CHECK(M5Cardputer.Display.lines[2].find("AP:0/1")!=std::string::npos);
     CHECK(M5Cardputer.Display.lines[4]=="No matching networks");
-    key("."); enter(); CHECK(M5Cardputer.Display.lines[0]=="BROADCOM RADAR");
+    key("."); enter(); CHECK(M5Cardputer.Display.lines[0].find("BRCM-RDR ")==0);
     // Manual export includes records hidden by the display filter.
     mock::files.clear(); mock::sdPresent=true; key("e"); CHECK(exporter.busy());
     key("f"); // Filter changes are disabled while exporting.
@@ -485,11 +485,102 @@ void uiFilterTests() {
     key("f"); CHECK(M5Cardputer.Display.lines[3].find(">NONE     Plain")!=std::string::npos);
     CHECK(M5Cardputer.Display.boundsOk);
 }
+void uiStateTests() {
+    mock::files.clear(); mock::sdPresent=true; mock::result=ESP_OK;
+    WifiScanner scanner; CHECK(scanner.begin()); AccessPointStore store;
+    PcapRing ring; Exporter exporter; CHECK(exporter.mount()); DisplayUi ui; CHECK(ui.begin());
+    uint32_t rejected=7,malformed=3;
+    auto tick=[&]() { mock::nowUs+=600000; ui.tick(store,scanner,exporter,ring,rejected,malformed,"Cardputer ADV"); M5Cardputer.Keyboard.changed=false; };
+    auto key=[&](const char* text) { M5Cardputer.Keyboard.event(text); tick(); };
+    auto enter=[&]() { M5Cardputer.Keyboard.event(""); M5Cardputer.Keyboard.state.enter=true; tick(); };
+    auto secondary=[&]() {
+        CHECK(M5Cardputer.Display.lines[8].find("Esc:")==std::string::npos);
+        CHECK(M5Cardputer.Display.lines[8].find("Left/Right")==std::string::npos);
+        CHECK(M5Cardputer.Display.lines[8].find("Enter:")==std::string::npos);
+        CHECK(M5Cardputer.Display.lines[8].find("E:")==std::string::npos);
+        CHECK(M5Cardputer.Display.boundsOk);
+    };
+    M5Cardputer.Keyboard.changed=false; tick();
+    CHECK(M5Cardputer.Display.lines[0].find(kFirmwareVersion)!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[4]=="Listening for networks...");
+    key("s"); CHECK(M5Cardputer.Display.lines[4]=="Scan paused; no networks"); key("s");
+    // Binary names and long advertised identity remain readable without splitting escapes.
+    Data binary(32,0xff), identity;
+    tlv(identity,0x1021,Data(64,0xfe)); tlv(identity,0x1023,text("A model name longer than the display width"));
+    auto bytes=beacon(binary); wps(bytes,identity); store.observe(parse(bytes)); tick();
+    CHECK(M5Cardputer.Display.lines[3].find("...")!=std::string::npos);
+    enter(); CHECK(M5Cardputer.Display.lines[0]=="1/7 SUMMARY"); secondary();
+    CHECK(M5Cardputer.Display.lines[1].size()==24);
+    CHECK(M5Cardputer.Display.lines[2].find("...")!=std::string::npos);
+    key("v"); CHECK(M5Cardputer.Display.lines[0]=="SSID 1/1"); secondary();
+    std::string shown;
+    for(unsigned row=1;row<=7;++row) shown+=M5Cardputer.Display.lines[row];
+    std::string expected; for(unsigned i=0;i<32;++i) expected+="\\xFF";
+    CHECK(shown==expected); key("`");
+    key("/"); key("/"); CHECK(M5Cardputer.Display.lines[0]=="3/7 IDENTITY");
+    key("."); CHECK(M5Cardputer.Display.backgrounds[2]==TFT_NAVY);
+    key("h"); secondary(); key("/"); CHECK(M5Cardputer.Display.lines[0]=="HELP 2/4");
+    CHECK(M5Cardputer.Display.lines[2]=="WPS: test-ready APs");
+    key("`"); CHECK(M5Cardputer.Display.lines[0]=="3/7 IDENTITY");
+    CHECK(M5Cardputer.Display.backgrounds[2]==TFT_NAVY);
+    key("v"); CHECK(M5Cardputer.Display.lines[0]=="Manufacturer 1/2"); secondary();
+    shown.clear(); for(unsigned row=1;row<=7;++row) shown+=M5Cardputer.Display.lines[row];
+    key("h"); key("h"); CHECK(M5Cardputer.Display.lines[0]=="Manufacturer 1/2");
+    key("/"); CHECK(M5Cardputer.Display.lines[0]=="Manufacturer 2/2");
+    for(unsigned row=1;row<=7;++row) shown+=M5Cardputer.Display.lines[row];
+    expected.clear(); for(unsigned i=0;i<64;++i) expected+="\\xFE";
+    CHECK(shown==expected); CHECK(M5Cardputer.Display.lines[8].find("complete value")!=std::string::npos);
+    key("`");
+    // Every detail page survives a help round trip and has a data/status bottom row.
+    for(unsigned page=0;page<7;++page) {
+        const auto title=M5Cardputer.Display.lines[0]; secondary();
+        key("h"); key("h"); CHECK(M5Cardputer.Display.lines[0]==title); key("/");
+    }
+    // Channel failures retain the current mode, chosen mode and source detail page.
+    key("m"); CHECK(M5Cardputer.Display.lines[3].find("Current: HOP")==0);
+    key("/"); CHECK(M5Cardputer.Display.lines[4]=="Select: HOLD CH 01"); secondary();
+    key("h"); key("d"); CHECK(M5Cardputer.Display.lines[0]=="SCAN DIAGNOSTICS"); secondary();
+    key("`"); CHECK(M5Cardputer.Display.lines[0]=="CHANNEL MODE");
+    mock::result=ESP_FAIL; enter(); CHECK(M5Cardputer.Display.lines[0]=="CHANNEL MODE");
+    CHECK(scanner.stats().hopping); CHECK(M5Cardputer.Display.lines[8].find("Apply failed:")==0);
+    mock::result=ESP_OK; enter(); CHECK(M5Cardputer.Display.lines[0]=="3/7 IDENTITY");
+    CHECK(!scanner.stats().hopping && scanner.stats().channel==1);
+    key("`"); mock::result=ESP_FAIL; key("s"); CHECK(scanner.stats().running);
+    CHECK(M5Cardputer.Display.lines[8].find("Scan:")==0);
+    mock::result=ESP_OK; key("s"); CHECK(!scanner.stats().running);
+    mock::nowUs+=6000000; tick(); CHECK(M5Cardputer.Display.lines[8].find("F:ALL")==0);
+    key("h"); key("d"); CHECK(M5Cardputer.Display.lines[8]=="No scan API error"); key("`");
+    // Export completion identifies all requested formats within 26 cells.
+    key("p"); key("e"); while(exporter.busy()) tick();
+    CHECK(M5Cardputer.Display.lines[8]=="Saved scan-001 J/C/P");
+    CHECK(mock::files.count("/broadcom-radar/scan-001.pcap"));
+    key("p"); key("e"); while(exporter.busy()) tick();
+    CHECK(M5Cardputer.Display.lines[8].find("no P")!=std::string::npos);
+    // Chorded R cannot arm a reset before another command or navigation.
+    key("rf"); key("r"); CHECK(store.size()==1); key("f"); key("f");
+    key("rs"); key("r"); CHECK(store.size()==1); key("s");
+    // An armed reset expires and is cancelled by another action; SD files survive.
+    key("r"); CHECK(store.size()==1); mock::nowUs+=3100000; tick(); key("r"); CHECK(store.size()==1);
+    key("h"); key("h"); key("r"); CHECK(store.size()==1);
+    const auto fileCount=mock::files.size(); key("r");
+    CHECK(store.size()==0 && rejected==0 && malformed==0 && !scanner.stats().running);
+    CHECK(mock::files.size()==fileCount);
+    // The full-list warning reports capacity independently of filtering and queue loss.
+    for(unsigned i=1;i<=129;++i) store.observe(parse(beacon(text("AP"),uint8_t(i))));
+    tick(); CHECK(store.size()==128 && store.dropped()==1);
+    CHECK(M5Cardputer.Display.lines[2].find("FULL")!=std::string::npos);
+    ui.notify("Saved brcm-001 + PCAP"); key("f");
+    CHECK(M5Cardputer.Display.lines[0].find("WPS")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[4]=="No matching networks");
+    key("h"); key("d");
+    CHECK(M5Cardputer.Display.lines[2]=="New AP ads dropped: 1");
+    CHECK(M5Cardputer.Display.lines[3].find("RX queue drops:")==0); secondary();
+}
 }
 int main(int argc,char** argv) {
     try {
         parserTests(); storeTests(); scannerTests(); exportTests(argc>1?argv[1]:nullptr);
-        detectionTests(argc>1?argv[1]:nullptr); uiTests(); uiSortingTests(); uiFilterTests(); corruptionTests();
+        detectionTests(argc>1?argv[1]:nullptr); uiTests(); uiSortingTests(); uiFilterTests(); uiStateTests(); corruptionTests();
         std::cout << "PASS: " << checks << " checks; 50,000 deterministic corrupt frames\n";
     } catch(const std::exception& e) { std::cerr << "FAIL: " << e.what() << '\n'; return 1; }
 }

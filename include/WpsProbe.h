@@ -68,6 +68,7 @@ public:
     bool done() const { return result_.stage == ProbeStage::Done; }
     const ProbeResult& result() const { return result_; }
     const Observation& target() const { return target_; }
+    uint32_t attemptId() const { return attemptId_; }
     const uint8_t* station() const { return station_; }
     size_t recordCount() const { return recordCount_; }
     const ProbeRecord& record(size_t i) const { return records_[i]; }
@@ -82,6 +83,7 @@ private:
     void differential(uint8_t identifier);
     void dataHeader(size_t eapLength);
     Observation target_;
+    uint32_t attemptId_ = 0;
     ProbeResult result_;
     ProbeRecord records_[kProbeRecords]{};
     size_t recordCount_ = 0, pendingLength_ = 0, associationLength_ = 0;

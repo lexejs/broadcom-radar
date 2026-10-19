@@ -34,7 +34,7 @@ bool Exporter::mount() {
     spi_.begin(40, 39, 14, 12);
     available_ = SD.begin(12, spi_, 10000000) && SD.cardType() != CARD_NONE;
     if (available_ && !SD.exists("/broadcom-radar")) available_ = SD.mkdir("/broadcom-radar");
-    std::snprintf(message_, sizeof(message_), "%s", available_ ? "SD ready" : "SD unavailable; scan continues");
+    std::snprintf(message_, sizeof(message_), "%s", available_ ? "SD ready" : "SD unavailable");
     return available_;
 }
 void Exporter::filename(char* path, size_t size, const char* ext, bool partial) const {
@@ -69,7 +69,7 @@ bool Exporter::start(const AccessPointStore& store, const ScanStats& stats, cons
     FileSink sink(file_);
     if (!writeJsonHeader(sink, stats, hardware, RADAR_COUNTRY, ring) || !sink.flush()) { fail("SD write failed"); return false; }
     phase_ = Phase::Json;
-    std::snprintf(message_, sizeof(message_), "Export scan-%03u (capture paused)", sequence_);
+    std::snprintf(message_, sizeof(message_), "Saving scan-%03u; paused", sequence_);
     return true;
 }
 bool Exporter::nextSequence() {
@@ -129,7 +129,7 @@ bool Exporter::saveDetection(const Observation& observation, const AccessPoint* 
     file_.flush(); good = good && file_.getWriteError() == 0; file_.close();
     // Publish JSON last: a final detection JSON means all three files were completed.
     if (!good || !publishFile("pcap") || !publishFile("csv") || !publishFile("json")) {
-        fail("BRCM save failed; retry later"); return false;
+        fail("BRCM save failed; retrying"); return false;
     }
     size_t index = 0;
     while (index < savedCount_ && std::memcmp(saved_[index].bssid, aggregate->info.bssid, 6)) ++index;
@@ -145,11 +145,22 @@ bool Exporter::saveDetection(const Observation& observation, const AccessPoint* 
     std::snprintf(message_, sizeof(message_), "Saved brcm-%03u + PCAP", detectionSequence_);
     return true;
 }
+const char* Exporter::probeMessage(const WpsProbe& probe) const {
+    return reportProbe_ == &probe && reportAttempt_ == probe.attemptId() ? reportMessage_ : "Report: pending";
+}
+bool Exporter::probeSaved(const WpsProbe& probe) const {
+    return reportProbe_ == &probe && reportAttempt_ == probe.attemptId() && reportSaved_;
+}
 bool Exporter::saveProbe(const WpsProbe& probe, const char* hardware) {
     if (busy() || !probe.done()) return false;
+    reportProbe_ = &probe; reportAttempt_ = probe.attemptId(); reportSaved_ = false;
+    auto failed = [&]() {
+        std::snprintf(reportMessage_, sizeof(reportMessage_), "%s", message_);
+        return false;
+    };
     probe_ = true; detection_ = false;
-    if (!available_ && !mount()) return false;
-    if (!nextSequence()) return false;
+    if (!available_ && !mount()) return failed();
+    if (!nextSequence()) return failed();
     bool good = open("json");
     if (good) { FileSink sink(file_); good = writeProbeJson(sink, probe, hardware) && sink.flush(); }
     file_.flush(); good = good && file_.getWriteError() == 0; file_.close();
@@ -160,8 +171,11 @@ bool Exporter::saveProbe(const WpsProbe& probe, const char* hardware) {
         good = good && sink.flush();
     }
     file_.flush(); good = good && file_.getWriteError() == 0; file_.close();
-    if (!good || !publishFile("pcap") || !publishFile("json")) { fail("Test save failed; parts kept"); return false; }
-    std::snprintf(message_, sizeof(message_), "Saved test-%03u + PCAP", probeSequence_); return true;
+    if (!good || !publishFile("pcap") || !publishFile("json")) { fail("Test save failed; kept part"); return failed(); }
+    reportSaved_ = true;
+    std::snprintf(message_, sizeof(message_), "Saved test-%03u + PCAP", probeSequence_);
+    std::snprintf(reportMessage_, sizeof(reportMessage_), "Report: test-%03u saved", probeSequence_);
+    return true;
 }
 void Exporter::tick() {
     if (!busy()) return;
@@ -192,12 +206,12 @@ void Exporter::tick() {
         break;
     case Phase::Finish:
         phase_ = Phase::Idle;
-        std::snprintf(message_, sizeof(message_), "Saved scan-%03u.json / csv%s", sequence_, ring_->enabled() ? " / pcap" : "");
+        std::snprintf(message_, sizeof(message_), "Saved scan-%03u %s", sequence_, ring_->enabled() ? "J/C/P" : "J/C; no P");
         return;
     default: return;
     }
     // A phase transition may have closed the file. All transition buffers were flushed above.
     if (good && (sink.flush() || phase_ == Phase::Finish)) return;
-    fail("SD export failed; partial files kept");
+    fail("Save failed; parts kept");
 }
 }

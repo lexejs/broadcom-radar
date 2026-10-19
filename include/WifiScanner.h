@@ -15,6 +15,7 @@ public:
     void clear(); // Call with capture paused.
     ScanStats stats() const;
     const char* error() const { return error_; }
+    uint32_t errorCount() const { return errorCount_; }
 #if RADAR_WPS_PROBE
     bool probeCapture(bool enabled, const uint8_t* bssid, const uint8_t* station);
 #endif
@@ -33,6 +34,7 @@ private:
     uint8_t channel_ = 1, firstChannel_ = 1, lastChannel_ = 13;
     bool ready_ = false, running_ = false, hopping_ = true;
     const char* error_ = "";
+    uint32_t errorCount_ = 0;
 #if RADAR_WPS_PROBE
     bool probeCapture_ = false;
     uint8_t probeBssid_[6]{}, probeStation_[6]{};

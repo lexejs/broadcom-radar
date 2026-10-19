@@ -16,6 +16,8 @@ public:
     void tick();
     bool busy() const { return phase_ != Phase::Idle; }
     const char* message() const { return message_; }
+    const char* probeMessage(const WpsProbe& probe) const;
+    bool probeSaved(const WpsProbe& probe) const;
 private:
     enum class Phase { Idle, Json, Csv, Pcap, Finish };
     class FileSink : public Sink {
@@ -53,5 +55,9 @@ private:
     unsigned probeSequence_ = 0;
     bool available_ = false;
     char message_[64] = "SD unavailable";
+    const WpsProbe* reportProbe_ = nullptr;
+    uint32_t reportAttempt_ = 0;
+    bool reportSaved_ = false;
+    char reportMessage_[64] = "Report: pending";
 };
 }

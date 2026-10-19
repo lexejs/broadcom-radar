@@ -75,6 +75,7 @@ const char* WpsProbe::startError(const Observation& target) const {
 }
 bool WpsProbe::request(const Observation& target) {
     if (startError(target)) return false;
+    if (!++attemptId_) ++attemptId_;
     target_ = target; result_ = ProbeResult{}; result_.stage = ProbeStage::Requested; result_.reason = ProbeReason::Running;
     recordCount_ = pendingLength_ = associationLength_ = 0;
     lastTxUs_ = 0;
