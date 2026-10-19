@@ -2,9 +2,12 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#if RADAR_DRIVER_COMPAT
+extern "C" int ieee80211_raw_frame_sanity_check(int, const void*, int, bool);
+#endif
 using esp_err_t = int;
-constexpr int ESP_OK = 0, ESP_ERR_INVALID_STATE = 1, ESP_FAIL = 2;
-constexpr int ESP_ERR_INVALID_ARG = 3;
+constexpr int ESP_OK = 0, ESP_ERR_INVALID_STATE = 0x103, ESP_FAIL = -1;
+constexpr int ESP_ERR_INVALID_ARG = 0x102;
 enum wifi_promiscuous_pkt_type_t { WIFI_PKT_MGMT, WIFI_PKT_DATA, WIFI_PKT_CTRL };
 using wifi_promiscuous_cb_t = void (*)(void*, wifi_promiscuous_pkt_type_t);
 constexpr int WIFI_STORAGE_RAM = 0, WIFI_MODE_STA = 1, WIFI_IF_STA = 0, WIFI_PS_NONE = 0, WIFI_SECOND_CHAN_NONE = 0;
@@ -54,8 +57,13 @@ inline int esp_wifi_get_mac(int, uint8_t* mac) {
     const uint8_t station[] = {2,0,0,0,0,0xee};
     for (unsigned i=0;i<6;++i) mac[i]=station[i]; return mock::call("get_mac");
 }
-inline int esp_wifi_80211_tx(int, const void* data, int length, bool sequence) {
+inline int esp_wifi_80211_tx(int interface, const void* data, int length, bool sequence) {
+    (void)interface;
     if (!sequence || length < 24 || length > 1500) return ESP_ERR_INVALID_ARG;
+#if RADAR_DRIVER_COMPAT
+    const int sanity = ieee80211_raw_frame_sanity_check(interface, data, length, sequence);
+    if (sanity) return sanity;
+#endif
     const auto* bytes=static_cast<const uint8_t*>(data);
     mock::transmitted.emplace_back(bytes,bytes+length); mock::call("experimental_tx"); return mock::txResult;
 }

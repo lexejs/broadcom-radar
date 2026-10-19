@@ -99,7 +99,7 @@ void protocolTests(const char* output) {
     bad.channel=6; bad.ssid.length=0; CHECK(!invalid.request(bad));
     WpsProbe stale; auto bytes=advertisement(); CHECK(stale.request(target(bytes))); stale.begin(station,nowUs);
     stale.receive(raw(beacon({'O','t','h','e','r'}))); CHECK(!stale.pending(frame));
-    stale.tick(nowUs+5000001); CHECK(stale.done() && stale.result().verdict==ProbeVerdict::Unknown);
+    stale.tick(nowUs+10000001); CHECK(stale.done() && stale.result().verdict==ProbeVerdict::Unknown);
     WpsProbe wrong; entry(wrong); auto foreign=expanded(9,6); foreign[15]=2;
     wrong.receive(raw(foreign)); CHECK(wrong.result().stage==ProbeStage::Differential);
     foreign=expanded(9,6); foreign[9]^=1; wrong.receive(raw(foreign)); CHECK(wrong.result().stage==ProbeStage::Differential);
@@ -165,7 +165,12 @@ void transportTests() {
         auto foreign=bytes; foreign[15]=foreign[21]=2; deliver(foreign); CHECK(!scanner.pop(frame));
         deliver(bytes); CHECK(scanner.pop(frame)); probe.receive(frame);
         const auto before=mock::transmitted.size();
-        CHECK(radio.tick(probe,scanner,exporter,frame,"Cardputer ADV"));
+        const bool complete = radio.tick(probe,scanner,exporter,frame,"Cardputer ADV");
+        if (running) {
+            CHECK(!complete && probe.restoring()); deliver(bytes); CHECK(scanner.pop(frame)); probe.receive(frame);
+            CHECK(radio.tick(probe,scanner,exporter,frame,"Cardputer ADV"));
+            CHECK(probe.result().scanRxFrames == 1);
+        } else CHECK(complete);
         CHECK(probe.done() && probe.result().reported && probe.result().restored);
         CHECK(probe.result().verdict==ProbeVerdict::Unknown && probe.result().reason==ProbeReason::DriverRejected);
         CHECK(probe.result().stoppedAt==ProbeStage::Authentication && probe.result().txAccepted==0);
@@ -181,7 +186,10 @@ void transportTests() {
     WifiScanner scanner; CHECK(scanner.begin());
     WpsProbe probe; WpsProbeRadio radio; Exporter exporter; auto bytes=advertisement();
     CHECK(probe.request(target(bytes))); radio.tick(probe,scanner,exporter,frame,"Cardputer ADV");
-    probe.cancel(mock::nowUs); CHECK(radio.tick(probe,scanner,exporter,frame,"Cardputer ADV"));
+    probe.cancel(mock::nowUs); CHECK(!radio.tick(probe,scanner,exporter,frame,"Cardputer ADV"));
+    CHECK(probe.restoring()); mock::nowUs += 1500001;
+    CHECK(radio.tick(probe,scanner,exporter,frame,"Cardputer ADV"));
+    CHECK(probe.result().scanRxFrames == 0);
     CHECK(probe.result().restored && scanner.stats().running && scanner.stats().hopping);
     CHECK(probe.request(target(bytes))); radio.tick(probe,scanner,exporter,frame,"Cardputer ADV");
     probe.cancel(mock::nowUs); mock::result=ESP_FAIL;

@@ -37,6 +37,7 @@ const char* probeStageName(ProbeStage stage) {
     case ProbeStage::Start: return "WSC_START";
     case ProbeStage::Differential: return "WPS_DIFFERENTIAL";
     case ProbeStage::Cleanup: return "CLEANUP";
+    case ProbeStage::Restore: return "CHECK_SCAN_RX";
     default: return "DONE";
     }
 }
@@ -56,6 +57,7 @@ const char* probeReasonName(ProbeReason reason) {
     case ProbeReason::Cancelled: return "CANCELLED";
     case ProbeReason::TraceFull: return "TRACE_FULL";
     case ProbeReason::RadioSetupFailed: return "RADIO_SETUP_FAILED";
+    case ProbeReason::TransportReady: return "TRANSPORT_REACHED_WSC_START";
     default: return "INVALID_ADVERTISEMENT";
     }
 }
@@ -73,7 +75,7 @@ bool WpsProbe::request(const Observation& target) {
 void WpsProbe::begin(const uint8_t* station, uint64_t nowUs) {
     if (!requested()) return;
     std::memcpy(station_, station, 6); result_.startedUs = nowUs;
-    result_.stage = ProbeStage::Advertisement; deadlineUs_ = nowUs + 5000000ULL;
+    result_.stage = ProbeStage::Advertisement; deadlineUs_ = nowUs + 10000000ULL;
 }
 void WpsProbe::record(const uint8_t* p, size_t n, uint64_t nowUs, bool tx) {
     if (recordCount_ == kProbeRecords) { ++result_.traceDropped; return; }
@@ -123,8 +125,17 @@ bool WpsProbe::pending(Frame& frame) const {
     frame.length = pendingLength_; frame.channel = target_.channel;
     std::memcpy(frame.bytes, pending_, pendingLength_); return true;
 }
-void WpsProbe::transmitted(int error, uint64_t nowUs) {
+bool WpsProbe::matchesPending(const Frame& frame) const {
+    return pendingLength_ && frame.channel == target_.channel && frame.length == pendingLength_ &&
+           !std::memcmp(frame.bytes, pending_, pendingLength_);
+}
+void WpsProbe::transmitted(int error, uint64_t nowUs, bool compatibilityApplied, int stockError, bool stockCheckObserved) {
     if (!pendingLength_) return;
+    if (result_.txAttempts < kProbeTxEvents) {
+        auto& tx = result_.tx[result_.txAttempts++]; tx.timestampUs = nowUs; tx.stage = result_.stage;
+        tx.length = pendingLength_; tx.error = error; tx.stockError = stockError; tx.compatibilityApplied = compatibilityApplied;
+        tx.stockCheckObserved = stockCheckObserved;
+    }
     const bool cleanup = result_.stage == ProbeStage::Cleanup;
     if (!error) { record(pending_, pendingLength_, nowUs, true); ++result_.txAccepted; lastTxUs_ = nowUs; }
     pendingLength_ = 0;
@@ -140,7 +151,7 @@ void WpsProbe::transmitted(int error, uint64_t nowUs) {
 void WpsProbe::finish(ProbeReason reason, uint64_t nowUs, ProbeVerdict verdict) {
     if (done() || result_.stage == ProbeStage::Idle) return;
     result_.stoppedAt = result_.stage; result_.reason = reason; result_.verdict = verdict;
-    if (reason == ProbeReason::Response && result_.traceDropped) {
+    if ((reason == ProbeReason::Response || reason == ProbeReason::TransportReady) && result_.traceDropped) {
         result_.reason = ProbeReason::TraceFull; result_.verdict = ProbeVerdict::Unknown;
     }
     pendingLength_ = 0;
@@ -151,22 +162,34 @@ void WpsProbe::finish(ProbeReason reason, uint64_t nowUs, ProbeVerdict verdict) 
 }
 void WpsProbe::driverFailure(int error, uint64_t nowUs) { result_.driverError = error; finish(ProbeReason::DriverRejected, nowUs); }
 void WpsProbe::setupFailure(int error, uint64_t nowUs) { result_.driverError = error; finish(ProbeReason::RadioSetupFailed, nowUs); }
-void WpsProbe::cancel(uint64_t nowUs) { finish(ProbeReason::Cancelled, nowUs); }
+void WpsProbe::cancel(uint64_t nowUs) { if (!restoring()) finish(ProbeReason::Cancelled, nowUs); }
 void WpsProbe::tick(uint64_t nowUs) {
-    if (busy() && !requested() && result_.stage != ProbeStage::Cleanup &&
-        (nowUs >= deadlineUs_ || nowUs - result_.startedUs >= 20000000ULL))
+    if (busy() && !requested() && !restoring() && result_.stage != ProbeStage::Cleanup &&
+        (nowUs >= deadlineUs_ || nowUs - result_.startedUs >= 25000000ULL))
         finish(result_.stage == ProbeStage::Advertisement && observedNoWps_ ? ProbeReason::NoWps : ProbeReason::Timeout, nowUs);
 }
 void WpsProbe::receive(const Frame& frame) {
-    if (!busy() || requested() || pendingLength_ || frame.channel != target_.channel || frame.timestampUs < result_.startedUs || frame.timestampUs < lastTxUs_ ||
+    if (restoring()) {
+        if (frame.timestampUs >= result_.scanRestoreUs && isAdvertisement(frame.bytes, frame.length)) {
+            ++result_.scanRxFrames; if (!result_.scanRxFirstUs) result_.scanRxFirstUs = frame.timestampUs;
+        }
+        return;
+    }
+    if (!busy() || requested() || pendingLength_ ||
         !isProbeReply(frame.bytes, frame.length, target_.bssid, station_)) return;
+    if (frame.timestampUs < result_.startedUs || frame.timestampUs < lastTxUs_) { ++result_.stale; return; }
+    result_.lastTargetUs = frame.timestampUs; result_.lastRssi = frame.rssi;
+    if (frame.channel != target_.channel) { ++result_.wrongChannel; return; }
     const auto* p = frame.bytes; const size_t n = frame.length;
     if (result_.stage == ProbeStage::Advertisement) {
+        if (p[0] != 0x80 && p[0] != 0x50) return;
+        ++result_.advertisements;
+        if (result_.advertisements == 1) record(p, n, frame.timestampUs, false);
         Observation fresh;
-        if (!parseAdvertisement(p, n, frame.rssi, frame.channel, frame.timestampUs, fresh) || fresh.malformed) return;
-        if (fresh.channel != target_.channel || fresh.ssid.length != target_.ssid.length ||
-            std::memcmp(fresh.ssid.data, target_.ssid.data, fresh.ssid.length)) return;
-        if (!fresh.wpsAdvertised) { observedNoWps_ = true; return; }
+        if (!parseAdvertisement(p, n, frame.rssi, frame.channel, frame.timestampUs, fresh) || fresh.malformed) { ++result_.malformed; return; }
+        if (fresh.channel != target_.channel) { ++result_.wrongChannel; return; }
+        if (fresh.ssid.length != target_.ssid.length || std::memcmp(fresh.ssid.data, target_.ssid.data, fresh.ssid.length)) { ++result_.wrongSsid; return; }
+        if (!fresh.wpsAdvertised) { observedNoWps_ = true; ++result_.noWps; return; }
         target_.capabilities = fresh.capabilities;
         associationLength_ = 0; bool rates = false;
         for (size_t i = 36; i + 2 <= n;) {
@@ -185,22 +208,24 @@ void WpsProbe::receive(const Frame& frame) {
             if (sizeof(fallback) > sizeof(associationIes_) - associationLength_) { finish(ProbeReason::InvalidAdvertisement, frame.timestampUs); return; }
             std::memcpy(associationIes_ + associationLength_, fallback, sizeof(fallback)); associationLength_ += sizeof(fallback);
         }
-        record(p, n, frame.timestampUs, false); authentication(); return;
+        if (result_.advertisements != 1) record(p, n, frame.timestampUs, false);
+        authentication(); return;
     }
     if (p[0] == 0x80 || p[0] == 0x50) return;
     record(p, n, frame.timestampUs, false);
     if ((p[0] == 0xc0 || p[0] == 0xa0) && n >= 26) {
+        result_.apStatus = le16(p + 24);
         sessionStarted_ = false; finish(ProbeReason::ApRejected, frame.timestampUs); return;
     }
     if (result_.stage == ProbeStage::Authentication) {
         if (p[0] != 0xb0 || n < 30 || le16(p + 24) != 0 || le16(p + 26) != 2) return;
-        if (le16(p + 28)) finish(ProbeReason::ApRejected, frame.timestampUs);
+        if ((result_.apStatus = le16(p + 28))) finish(ProbeReason::ApRejected, frame.timestampUs);
         else association();
         return;
     }
     if (result_.stage == ProbeStage::Association) {
         if (p[0] != 0x10 || n < 30) return;
-        if (le16(p + 26)) finish(ProbeReason::ApRejected, frame.timestampUs);
+        if ((result_.apStatus = le16(p + 26))) finish(ProbeReason::ApRejected, frame.timestampUs);
         else eapolStart();
         return;
     }
@@ -218,7 +243,10 @@ void WpsProbe::receive(const Frame& frame) {
     }
     const bool wsc = length >= 14 && !std::memcmp(eap + 4, kWsc, sizeof(kWsc));
     if (result_.stage == ProbeStage::Start && eap[0] == 1 && wsc && length == 14 && eap[12] == 1 && eap[13] == 0) {
-        wpsEntered_ = true; differential(eap[1]); return;
+        wpsEntered_ = result_.wscStartReceived = true;
+        if (result_.transportOnly) finish(ProbeReason::TransportReady, frame.timestampUs);
+        else differential(eap[1]);
+        return;
     }
     if (result_.stage == ProbeStage::Differential && wpsEntered_ && differentialSent_) {
         if (eap[0] == 4 && length == 4 && eap[1] == identifier_)

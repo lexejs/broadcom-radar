@@ -145,19 +145,39 @@ bool writeProbePcapFrame(Sink& s, const ProbeRecord& r) {
 bool writeProbeJson(Sink& sink, const WpsProbe& probe, const char* hardware) {
     Writer w{sink}; const auto& r = probe.result(); char bssid[18], station[18];
     renderMac(probe.target().bssid, bssid, sizeof(bssid)); renderMac(probe.station(), station, sizeof(station));
-    w.raw("{\"schema_version\":1,\"firmware_version\":"); w.str(kFirmwareVersion);
-    w.raw(",\"hardware\":"); w.str(hardware); w.raw(",\"mode\":\"experimental-active-wps\",\"bssid\":"); w.str(bssid);
+    w.raw("{\"schema_version\":2,\"firmware_version\":"); w.str(kFirmwareVersion);
+    w.raw(",\"hardware\":"); w.str(hardware); w.raw(",\"mode\":");
+    w.str(r.transportOnly ? "experimental-wps-transport" : "experimental-active-wps");
+    w.raw(",\"driver_transport\":"); w.str(RADAR_DRIVER_COMPAT ? "scoped-idf447-compatibility" : "stock-public-api");
+    w.raw(",\"bssid\":"); w.str(bssid);
     w.raw(",\"station\":"); w.str(station); w.raw(","); w.field("ssid", probe.target().ssid);
     w.fmt(",\"channel\":%u,\"started_us\":%llu,\"finished_us\":%llu,\"clock\":\"monotonic_since_boot\",",
           probe.target().channel, (unsigned long long)r.startedUs, (unsigned long long)r.finishedUs);
     w.raw("\"implementation_candidate\":"); w.str(probeVerdictName(r.verdict)); w.raw(",\"reason\":"); w.str(probeReasonName(r.reason));
     w.raw(",\"stopped_at\":"); w.str(probeStageName(r.stoppedAt));
+    w.raw(",\"driver_error_name\":");
+    w.str(r.driverError == 0 ? "ESP_OK" : r.driverError == 0x102 ? "ESP_ERR_INVALID_ARG" : "SEE_NUMERIC_ERROR_CODE");
     w.fmt(",\"driver_error\":%d,\"tx_accepted_by_driver\":%u,\"cleanup_accepted_by_driver\":%s,\"cleanup_error\":%d,",
           r.driverError, r.txAccepted, r.cleanupAccepted ? "true" : "false", r.cleanupError);
     w.fmt("\"pcap_frames\":%u,\"trace_dropped\":%u,\"trace_limit\":%u,\"captured_bytes_per_frame\":%u,",
           unsigned(probe.recordCount()), r.traceDropped, unsigned(kProbeRecords), unsigned(kProbeBytes));
-    w.raw("\"hardware_calibrated\":false,\"continuation_fragments_sent\":false,\"declared_wps_message_length\":0,");
-    w.raw("\"claim_boundary\":\"Experimental implementation-family fingerprint; not proof of vulnerability or patch status. Driver acceptance does not prove over-the-air delivery. Scan restoration is checked separately after saving.\",\"records\":[");
+    w.fmt("\"transport_only\":%s,\"wsc_start_received\":%s,\"hardware_calibrated\":false,\"continuation_fragments_sent\":false,\"declared_wps_message_length\":%s,",
+          r.transportOnly ? "true" : "false", r.wscStartReceived ? "true" : "false", r.transportOnly ? "null" : "0");
+    w.fmt("\"revalidation\":{\"window_ms\":10000,\"advertisements\":%u,\"malformed\":%u,\"wrong_ssid\":%u,\"wrong_channel\":%u,\"no_wps\":%u,\"stale\":%u,",
+          r.advertisements, r.malformed, r.wrongSsid, r.wrongChannel, r.noWps, r.stale);
+    w.fmt("\"last_target_us\":%llu,\"last_rssi_dbm\":%d,\"rssi_observed\":%s},\"ap_status_or_reason\":%u,",
+          (unsigned long long)r.lastTargetUs, r.lastRssi, r.lastTargetUs ? "true" : "false", r.apStatus);
+    w.fmt("\"capture_queue_drops\":%u,\"capture_oversize_drops\":%u,\"scan_restored\":%s,\"scan_was_running\":%s,\"scan_rx_frames\":%u,\"scan_rx_first_us\":%llu,",
+          r.queueDrops, r.oversizeDrops, r.restored ? "true" : "false", r.scanWasRunning ? "true" : "false", r.scanRxFrames, (unsigned long long)r.scanRxFirstUs);
+    w.raw("\"claim_boundary\":\"Experimental transport or implementation-family candidate; not proof of hostapd, vulnerability or patch status. Driver acceptance is not over-the-air proof. Scan RX counts advertisements observed after restoring capture.\",\"tx_attempts\":[");
+    for (size_t i = 0; i < r.txAttempts; ++i) {
+        const auto& tx = r.tx[i]; w.raw(i ? ",{\"stage\":" : "{\"stage\":"); w.str(probeStageName(tx.stage));
+        w.fmt(",\"timestamp_us\":%llu,\"length\":%u,\"driver_error\":%d,\"stock_check_error\":",
+              (unsigned long long)tx.timestampUs, tx.length, tx.error);
+        if (tx.stockCheckObserved) w.fmt("%d", tx.stockError); else w.raw("null");
+        w.fmt(",\"compatibility_applied\":%s}", tx.compatibilityApplied ? "true" : "false");
+    }
+    w.raw("],\"records\":[");
     for (size_t i = 0; i < probe.recordCount(); ++i) {
         const auto& record = probe.record(i);
         w.fmt("%s{\"pcap_index\":%u,\"direction\":\"%s\",\"captured\":%u,\"original\":%u}", i ? "," : "", unsigned(i),

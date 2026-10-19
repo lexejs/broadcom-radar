@@ -2,9 +2,17 @@
 #include "RadarTypes.h"
 namespace radar {
 constexpr size_t kProbeRecords = 16, kProbeBytes = 512;
-enum class ProbeStage { Idle, Requested, Advertisement, Authentication, Association, Identity, Start, Differential, Cleanup, Done };
+enum class ProbeStage { Idle, Requested, Advertisement, Authentication, Association, Identity, Start, Differential, Cleanup, Restore, Done };
 enum class ProbeVerdict { Unknown, HostapdLike, BroadcomLike };
-enum class ProbeReason { NotRun, Running, Response, NoWps, Timeout, ApRejected, UnexpectedEap, DriverRejected, Cancelled, InvalidAdvertisement, TraceFull, RadioSetupFailed };
+enum class ProbeReason { NotRun, Running, Response, NoWps, Timeout, ApRejected, UnexpectedEap, DriverRejected, Cancelled, InvalidAdvertisement, TraceFull, RadioSetupFailed, TransportReady };
+struct ProbeTx {
+    uint64_t timestampUs = 0;
+    ProbeStage stage = ProbeStage::Idle;
+    uint16_t length = 0;
+    int error = 0, stockError = 0;
+    bool compatibilityApplied = false, stockCheckObserved = false;
+};
+constexpr size_t kProbeTxEvents = 8;
 struct ProbeRecord {
     uint64_t timestampUs = 0;
     uint16_t captured = 0, original = 0;
@@ -18,6 +26,14 @@ struct ProbeResult {
     uint64_t startedUs = 0, finishedUs = 0;
     int driverError = 0, cleanupError = 0;
     uint16_t txAccepted = 0, traceDropped = 0;
+    ProbeTx tx[kProbeTxEvents]{};
+    uint16_t txAttempts = 0;
+    uint32_t advertisements = 0, malformed = 0, wrongSsid = 0, wrongChannel = 0, noWps = 0, stale = 0;
+    uint64_t lastTargetUs = 0, scanRestoreUs = 0, scanRxFirstUs = 0;
+    int8_t lastRssi = 0;
+    uint16_t apStatus = 0;
+    uint32_t scanRxFrames = 0, queueDrops = 0, oversizeDrops = 0;
+    bool transportOnly = RADAR_DRIVER_COMPAT, wscStartReceived = false, scanWasRunning = false;
     bool cleanupAccepted = false, restored = false, reported = false;
 };
 bool isProbeReply(const uint8_t* bytes, size_t length, const uint8_t* bssid, const uint8_t* station);
@@ -31,11 +47,18 @@ public:
     void receive(const Frame& frame);
     void tick(uint64_t nowUs);
     bool pending(Frame& frame) const;
-    void transmitted(int driverError, uint64_t nowUs);
+    bool matchesPending(const Frame& frame) const;
+    void transmitted(int driverError, uint64_t nowUs, bool compatibilityApplied = false, int stockError = 0, bool stockCheckObserved = false);
     void cancel(uint64_t nowUs);
     void driverFailure(int error, uint64_t nowUs);
     void setupFailure(int error, uint64_t nowUs);
-    void completeReport(bool restored) { result_.restored = restored; result_.reported = true; }
+    void startRestoration(bool restored, bool running, uint64_t nowUs) {
+        result_.restored = restored; result_.scanWasRunning = running;
+        result_.scanRestoreUs = nowUs; result_.stage = ProbeStage::Restore;
+    }
+    void captureDrops(uint32_t queue, uint32_t oversize) { result_.queueDrops = queue; result_.oversizeDrops = oversize; }
+    void completeReport(bool restored) { result_.restored = restored; result_.reported = true; result_.stage = ProbeStage::Done; }
+    bool restoring() const { return result_.stage == ProbeStage::Restore; }
     bool requested() const { return result_.stage == ProbeStage::Requested; }
     bool busy() const { return result_.stage != ProbeStage::Idle && result_.stage != ProbeStage::Done; }
     bool done() const { return result_.stage == ProbeStage::Done; }

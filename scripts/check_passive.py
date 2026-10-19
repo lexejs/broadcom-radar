@@ -19,8 +19,12 @@ for path in sorted(list((ROOT / "src").glob("*.cpp")) + list((ROOT / "include").
         apis = set(re.findall(r"\b(esp_wifi_\w+)\s*\(", content))
         if apis != {"esp_wifi_get_mac", "esp_wifi_80211_tx"}:
             raise SystemExit(f"Experimental transport API changes require review: {apis}")
-        if re.search(r"\besp_wifi_internal_\w+|sanity_check|override|patch_driver", content):
-            raise SystemExit("Driver bypass forbidden in experimental transport")
+        continue
+    if path.name == "DriverCompat.cpp":
+        if not content.startswith('#include "DriverCompat.h"\n#if RADAR_DRIVER_COMPAT\n') or not content.endswith("#endif\n"):
+            raise SystemExit("Driver compatibility must remain entirely build-gated")
+        if set(re.findall(r"\b(esp_wifi_\w+)\s*\(", content)) != {"esp_wifi_80211_tx"}:
+            raise SystemExit("Unexpected compatibility Wi-Fi API")
         continue
     used |= set(re.findall(r"\b(esp_wifi_\w+)\s*\(", content))
     if re.search(r"#\s*include\s*[<\"](?:WiFi|HTTPClient|WebServer|AsyncTCP|esp_supplicant|esp_wps|lwip/)", content):

@@ -111,18 +111,19 @@ void DisplayUi::draw(const AccessPointStore& store, const ScanStats& s, const Ex
     if (probe_ && (screen_ == Screen::ProbeConfirm || screen_ == Screen::Probe)) {
         const auto& target = screen_ == Screen::ProbeConfirm ? probeTarget_ : probe_->target();
         char ssid[129], mac[18]; renderBytes(target.ssid.data, target.ssid.length, ssid, sizeof(ssid)); renderMac(target.bssid, mac, sizeof(mac));
-        line(0, "EXPERIMENTAL WPS TEST"); foreground_ = TFT_WHITE; background_ = TFT_BLACK;
+        line(0, RADAR_DRIVER_COMPAT ? "WPS TRANSPORT TEST" : "EXPERIMENTAL WPS TEST"); foreground_ = TFT_WHITE; background_ = TFT_BLACK;
         line(1, "%s", ssid); line(2, "%s CH:%u", mac, target.channel);
         if (screen_ == Screen::ProbeConfirm) {
             line(3, "Active test of ONE AP"); line(4, "Use on your own AP only");
-            line(5, "Stock driver may reject TX"); line(6, "Uncalibrated fingerprint");
+            line(5, RADAR_DRIVER_COMPAT ? "Stop at WSC Start" : "Stock driver may reject TX");
+            line(6, RADAR_DRIVER_COMPAT ? "Experimental driver mode" : "Uncalibrated fingerprint");
             foreground_ = TFT_CYAN; line(8, "Enter:start Esc:cancel");
         } else {
             const auto& r = probe_->result();
-            line(3, "%s", probe_->busy() ? probeStageName(r.stage) : probeVerdictName(r.verdict));
+            line(3, "%s", probe_->busy() ? probeStageName(r.stage) : r.reason == ProbeReason::TransportReady ? "WSC START RECEIVED" : probeVerdictName(r.verdict));
             line(4, "%s", probeReasonName(r.reason));
             line(5, "TX:%u Frames:%u Err:%x", r.txAccepted, unsigned(probe_->recordCount()), unsigned(r.driverError));
-            line(6, "Not a patch/safety verdict");
+            line(6, "Ads:%u NoWPS:%u RX:%u", unsigned(r.advertisements), unsigned(r.noWps), unsigned(r.scanRxFrames));
             if (probe_->done()) line(7, "%s", r.reported && !r.restored ? "Scan restore FAILED" : ex.message());
             foreground_ = TFT_CYAN; line(8, probe_->busy() ? "Esc:cancel test" : "E:save report Esc:back");
         }
