@@ -225,12 +225,14 @@ void uiTests() {
     uint32_t rejected=0,malformed=0;
     auto tick=[&]() { mock::nowUs+=500000; ui.tick(store,scanner,exporter,ring,rejected,malformed,"Cardputer ADV"); M5Cardputer.Keyboard.changed=false; };
     auto key=[&](const char* text) { M5Cardputer.Keyboard.event(text); tick(); };
+    key("f"); CHECK(M5Cardputer.Display.lines[8].find("F:WPS")!=std::string::npos);
     key("t"); CHECK(!probe.busy()); CHECK(M5Cardputer.Display.lines[0]=="EXPERIMENTAL WPS TEST");
     CHECK(M5Cardputer.Display.lines[2].find("02:00:00:00:00:01")!=std::string::npos);
     key("`"); CHECK(!probe.busy()); CHECK(M5Cardputer.Display.lines[0]=="BROADCOM RADAR TEST");
-    key("t"); key("r"); CHECK(store.size()==1 && !probe.busy());
+    key("t"); key("r"); key("f"); CHECK(store.size()==1 && !probe.busy());
     M5Cardputer.Keyboard.event(""); M5Cardputer.Keyboard.state.enter=true; tick(); CHECK(probe.requested());
-    key("s"); CHECK(scanner.stats().running); key("`"); CHECK(probe.done() && probe.result().reason==ProbeReason::Cancelled);
+    key("s"); key("f"); CHECK(scanner.stats().running); key("`"); CHECK(probe.done() && probe.result().reason==ProbeReason::Cancelled);
+    key("`"); CHECK(M5Cardputer.Display.lines[8].find("F:WPS")!=std::string::npos);
     CHECK(M5Cardputer.Display.boundsOk && M5Cardputer.Display.directClears==0);
 }
 void blockedStartUiTests() {

@@ -71,14 +71,7 @@ const char* probeReasonName(ProbeReason reason) {
 }
 const char* WpsProbe::startError(const Observation& target) const {
     if (busy()) return "Another test is running";
-    if (target.malformed) return "Incomplete AP data";
-    if (!target.ssidPresent) return "SSID not observed";
-    if (hiddenSsid(target.ssid)) return "Hidden SSID";
-    if (target.channel < 1 || target.channel > 13) return "Unsupported channel";
-    uint8_t bssidBits = 0; for (auto byte : target.bssid) bssidBits |= byte;
-    if (!bssidBits || (target.bssid[0] & 1)) return "Invalid BSSID";
-    if (!target.wpsAdvertised) return "WPS not observed";
-    return nullptr;
+    return wpsTargetError(target);
 }
 bool WpsProbe::request(const Observation& target) {
     if (startError(target)) return false;

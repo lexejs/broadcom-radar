@@ -18,7 +18,7 @@
 #endif
 
 namespace radar {
-constexpr const char* kFirmwareVersion = "1.0.9";
+constexpr const char* kFirmwareVersion = "1.0.10";
 constexpr size_t kMaxAps = 128;
 constexpr size_t kMaxFrame = 2304;
 constexpr size_t kQueueDepth = 12;
@@ -92,6 +92,7 @@ const char* evidenceSource(uint8_t bit);
 Classification classify(const AccessPoint& ap);
 WpsState wpsState(const AccessPoint& ap);
 const char* wpsStateName(WpsState state);
+const char* wpsTargetError(const Observation& target);
 void renderBytes(const uint8_t* bytes, size_t length, char* output, size_t capacity);
 void renderMac(const uint8_t* bytes, char* output, size_t capacity);
 bool hiddenSsid(const Bytes<32>& ssid);

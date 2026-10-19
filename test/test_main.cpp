@@ -338,11 +338,11 @@ void uiTests() {
     CHECK(M5Cardputer.Display.lines[3].size()<=26);
     CHECK(M5Cardputer.Display.backgrounds[3]==TFT_NAVY);
     CHECK(M5Cardputer.Display.lines[7].empty());
-    CHECK(M5Cardputer.Display.lines[8]=="S:pause M:channel H:help");
+    CHECK(M5Cardputer.Display.lines[8]=="F:ALL S:pause M:CH H:help");
     ui.notify("Saved brcm-001 + PCAP"); tick();
     CHECK(M5Cardputer.Display.lines[8]=="Saved brcm-001 + PCAP");
     mock::nowUs+=5000000; tick();
-    CHECK(M5Cardputer.Display.lines[8]=="S:pause M:channel H:help");
+    CHECK(M5Cardputer.Display.lines[8]=="F:ALL S:pause M:CH H:help");
     const auto initialPushes=M5Cardputer.Display.pushes;
     tick(); tick(); CHECK(M5Cardputer.Display.pushes==initialPushes);
     key("h"); CHECK(M5Cardputer.Display.lines[0]=="KEYBOARD HELP");
@@ -432,11 +432,64 @@ void uiSortingTests() {
     CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS Broadcom-A")!=std::string::npos);
     CHECK(M5Cardputer.Display.boundsOk);
 }
+void uiFilterTests() {
+    WifiScanner scanner; CHECK(scanner.begin()); AccessPointStore store;
+    store.observe(parse(beacon(text("Plain"),1)));
+    Data identity; tlv(identity,0x1021,text("Example Vendor"));
+    auto ordinary=beacon(text("WPS-only"),2); wps(ordinary,identity); store.observe(parse(ordinary));
+    auto broadcom=beacon(text("BRCM-only"),3); proprietary(broadcom); store.observe(parse(broadcom));
+    auto combined=beacon(text("Combined"),4); proprietary(combined); wps(combined,identity); store.observe(parse(combined));
+    auto hidden=beacon({},5); proprietary(hidden); wps(hidden,identity); store.observe(parse(hidden));
+    auto unsupported=beacon(text("Channel-14"),6); wps(unsupported,identity);
+    auto observation=parse(unsupported); observation.channel=14; store.observe(observation);
+    auto incomplete=beacon(text("Incomplete"),7); wps(incomplete,identity); incomplete.push_back(221); store.observe(parse(incomplete));
+    PcapRing ring; Exporter exporter; DisplayUi ui; CHECK(ui.begin());
+    uint32_t rejected=0,malformed=0;
+    auto tick=[&]() { mock::nowUs+=600000;ui.tick(store,scanner,exporter,ring,rejected,malformed,"Cardputer ADV");M5Cardputer.Keyboard.changed=false; };
+    auto key=[&](const char* text) { M5Cardputer.Keyboard.event(text);tick(); };
+    auto enter=[&]() { M5Cardputer.Keyboard.event("");M5Cardputer.Keyboard.state.enter=true;tick(); };
+    M5Cardputer.Keyboard.event(""); M5Cardputer.Keyboard.changed=false; tick();
+    CHECK(M5Cardputer.Display.lines[2].find("AP:7/7")!=std::string::npos);
+    key("f");
+    CHECK(M5Cardputer.Display.lines[8].find("F:WPS")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[2].find("AP:2/7")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS Combined")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[4].find("WPS-only")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[5].empty());
+    key("."); key("."); enter(); CHECK(M5Cardputer.Display.lines[1]=="WPS-only");
+    key("F"); // A selected AP excluded by the next filter falls back to its first match.
+    CHECK(M5Cardputer.Display.lines[8].find("F:B+W")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[2].find("AP:1/7")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS Combined")!=std::string::npos);
+    // New WPS evidence promotes a previously hidden candidate without retargeting selection.
+    wps(broadcom,identity); store.observe(parse(broadcom)); tick();
+    CHECK(M5Cardputer.Display.lines[2].find("AP:2/7")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find("BRCM-only")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[4].find(">BRCM+WPS Combined")!=std::string::npos);
+    enter(); CHECK(M5Cardputer.Display.lines[1]=="Combined"); key("f");
+    CHECK(M5Cardputer.Display.lines[8].find("F:ALL")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[2].find("AP:7/7")!=std::string::npos);
+    CHECK(store.size()==7 && scanner.stats().running);
+    key("f"); key("f"); store.clear(); store.observe(parse(beacon(text("Plain"),1))); tick();
+    CHECK(M5Cardputer.Display.lines[2].find("AP:0/1")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[4]=="No matching networks");
+    key("."); enter(); CHECK(M5Cardputer.Display.lines[0]=="BROADCOM RADAR");
+    // Manual export includes records hidden by the display filter.
+    mock::files.clear(); mock::sdPresent=true; key("e"); CHECK(exporter.busy());
+    key("f"); // Filter changes are disabled while exporting.
+    for(unsigned i=0;i<100 && exporter.busy();++i) tick();
+    CHECK(!exporter.busy() && scanner.stats().running);
+    const auto& bytes=mock::files.at("/broadcom-radar/scan-001.json");
+    CHECK(std::string(bytes.begin(),bytes.end()).find("Plain")!=std::string::npos);
+    mock::nowUs+=5000000; tick(); CHECK(M5Cardputer.Display.lines[8].find("F:B+W")!=std::string::npos);
+    key("f"); CHECK(M5Cardputer.Display.lines[3].find(">NONE     Plain")!=std::string::npos);
+    CHECK(M5Cardputer.Display.boundsOk);
+}
 }
 int main(int argc,char** argv) {
     try {
         parserTests(); storeTests(); scannerTests(); exportTests(argc>1?argv[1]:nullptr);
-        detectionTests(argc>1?argv[1]:nullptr); uiTests(); uiSortingTests(); corruptionTests();
+        detectionTests(argc>1?argv[1]:nullptr); uiTests(); uiSortingTests(); uiFilterTests(); corruptionTests();
         std::cout << "PASS: " << checks << " checks; 50,000 deterministic corrupt frames\n";
     } catch(const std::exception& e) { std::cerr << "FAIL: " << e.what() << '\n'; return 1; }
 }

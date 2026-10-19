@@ -43,7 +43,10 @@ void DisplayUi::updateOrder(const AccessPointStore& store) {
     orderedCount_ = selected_ = 0;
     for (size_t group = 0; group < sizeof(kDetectionBadges) / sizeof(kDetectionBadges[0]); ++group) {
         for (size_t i = 0; i < store.size(); ++i) {
-            if (detectionGroup(store.at(i)) != group) continue;
+            const auto& ap = store.at(i);
+            if (filter_ != Filter::All && wpsTargetError(ap.info)) continue;
+            if (filter_ == Filter::BroadcomWps && classify(ap) != Classification::BroadcomSignature) continue;
+            if (detectionGroup(ap) != group) continue;
             if (i == selectedIndex) selected_ = orderedCount_;
             ordered_[orderedCount_++] = static_cast<uint8_t>(i);
         }
@@ -138,7 +141,7 @@ void DisplayUi::draw(const AccessPointStore& store, const ScanStats& s, const Ex
     else if (screen_ == Screen::Help) {
         line(0, "KEYBOARD HELP"); foreground_ = TFT_WHITE; background_ = TFT_BLACK;
         line(1, "; . , / : move / page"); line(2, "Enter: open / next / apply");
-        line(3, "S: pause / resume scan"); line(4, "M: hop / hold channel");
+        line(3, "F:ALL/WPS/B+W S:pause"); line(4, "M: hop / hold channel");
         line(5, "E: save JSON / CSV / PCAP"); line(6, "P: PCAP %s (last %u)", ring.enabled() ? "ON" : "OFF", unsigned(kPcapDepth));
         line(7, "R:clear Drop:%u", s.queueDrops + store.dropped()); foreground_ = TFT_CYAN;
 #if RADAR_WPS_PROBE
@@ -161,9 +164,10 @@ void DisplayUi::draw(const AccessPointStore& store, const ScanStats& s, const Ex
         line(0, "BROADCOM RADAR"); background_ = TFT_BLACK;
 #endif
         line(1, "%s %s CH:%02u B:%d%%", s.running ? "RUNNING" : "PAUSED", s.hopping ? "HOP" : "FIX", s.channel, M5Cardputer.Power.getBatteryLevel());
-        line(2, "AP:%u/%u BRCM:%u SD:%s", unsigned(store.size()), unsigned(kMaxAps), unsigned(store.broadcomCount()), ex.available() ? "OK" : "--");
+        line(2, "AP:%u/%u BRCM:%u SD:%s", unsigned(orderedCount_), unsigned(store.size()), unsigned(store.broadcomCount()), ex.available() ? "OK" : "--");
         const size_t top = selected_ >= kVisibleNetworks ? selected_ - kVisibleNetworks + 1 : 0;
         if (!store.size()) line(4, "Listening for networks...");
+        else if (!orderedCount_) { line(4, "No matching networks"); line(5, "F: change filter"); }
         for (size_t i = top; i < orderedCount_ && i < top + kVisibleNetworks; ++i) {
             const auto& ap = store.at(ordered_[i]); auto status = classify(ap); char ssid[129];
             renderBytes(ap.info.ssid.data, ap.info.ssid.length, ssid, sizeof(ssid));
@@ -173,7 +177,7 @@ void DisplayUi::draw(const AccessPointStore& store, const ScanStats& s, const Ex
         }
         foreground_ = TFT_CYAN; background_ = TFT_BLACK;
         if (ex.busy() || int32_t(noticeUntil_ - millis()) > 0) line(8, "%s", notice_[0] ? notice_ : ex.message());
-        else line(8, "S:%s M:channel H:help", s.running ? "pause" : "run");
+        else line(8, "F:%s S:%s M:CH H:help", filter_ == Filter::All ? "ALL" : filter_ == Filter::Wps ? "WPS" : "B+W", s.running ? "pause" : "run");
     }
     for (int i = 0; i < 9; ++i) {
         const auto& row = rows_[i]; auto& shown = shown_[i];
@@ -242,8 +246,8 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
         } else if (screen_ == Screen::Detail && (left || right || keys.enter)) page_ = (page_ + (left ? kPages - 1 : 1)) % kPages;
         else if (screen_ == Screen::List) {
             if ((up || left) && selected_) --selected_;
-            if ((down || right) && selected_ + 1 < store.size()) ++selected_;
-            if (keys.enter && store.size()) { screen_ = Screen::Detail; page_ = 0; }
+            if ((down || right) && selected_ + 1 < orderedCount_) ++selected_;
+            if (keys.enter && orderedCount_) { screen_ = Screen::Detail; page_ = 0; }
         }
         for (char c : keys.word) {
             if (exporter.busy()) break;
@@ -254,6 +258,10 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
             }
 #endif
             if (c == 'h') screen_ = screen_ == Screen::Help ? Screen::List : Screen::Help;
+            if (c == 'f' && (screen_ == Screen::List || screen_ == Screen::Detail || screen_ == Screen::Help)) {
+                filter_ = filter_ == Filter::All ? Filter::Wps : filter_ == Filter::Wps ? Filter::BroadcomWps : Filter::All;
+                updateOrder(store); screen_ = Screen::List;
+            }
             if (c == 's') scanner.setRunning(!scanner.stats().running);
             if (c == 'r') {
                 const bool running = scanner.stats().running;

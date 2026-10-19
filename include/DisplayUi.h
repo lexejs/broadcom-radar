@@ -14,6 +14,7 @@ public:
               PcapRing& ring, uint32_t& rejected, uint32_t& malformed, const char* hardware);
 private:
     enum class Screen { List, Detail, Channel, Help, ProbeConfirm, Probe };
+    enum class Filter { All, Wps, BroadcomWps };
     struct Row {
         char text[27]{};
         uint16_t foreground = TFT_WHITE, background = TFT_BLACK;
@@ -28,6 +29,7 @@ private:
     void value(int row, const char* name, const Text& text);
     void detail(const AccessPoint& ap, uint64_t nowUs);
     Screen screen_ = Screen::List;
+    Filter filter_ = Filter::All;
     uint8_t ordered_[kMaxAps]{};
     size_t orderedCount_ = 0;
     size_t selected_ = 0;
