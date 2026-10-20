@@ -84,7 +84,7 @@ void loop() {
                 const bool running = stats.running;
                 if (running && !scanner.setRunning(false)) continue;
                 stats = scanner.stats();
-                stats.rejected = rejected; stats.malformed = malformed; stats.storeDrops = store.dropped();
+                stats.rejected = rejected; stats.malformed = malformed; stats.storeDrops = store.dropped(); stats.storeReplacements = store.replacements();
                 exporter.saveDetection(observation, ap, frame, stats, hardware);
                 if (running) scanner.setRunning(true);
                 ui.notify(exporter.message());

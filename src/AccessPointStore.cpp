@@ -1,17 +1,39 @@
 #include "AccessPointStore.h"
 #include <cstring>
 namespace radar {
-void AccessPointStore::clear() { size_ = 0; dropped_ = 0; }
+void AccessPointStore::clear() {
+    size_ = 0; dropped_ = replacements_ = nextDiscovery_ = 0;
+    std::memset(protected_, 0, sizeof(protected_));
+}
+void AccessPointStore::protect(const uint8_t* selected, const uint8_t* target) {
+    const uint8_t* addresses[] = {selected, target};
+    for (size_t i = 0; i < 2; ++i) {
+        if (addresses[i]) std::memcpy(protected_[i], addresses[i], 6);
+        else std::memset(protected_[i], 0, 6);
+    }
+}
 const AccessPoint* AccessPointStore::observe(const Observation& obs) {
     size_t index = 0;
     while (index < size_ && std::memcmp(aps_[index].info.bssid, obs.bssid, 6)) ++index;
     if (index == size_) {
-        if (size_ == kMaxAps) { ++dropped_; return nullptr; }
-        aps_[size_] = AccessPoint{};
-        aps_[size_].info = obs;
-        if (obs.malformed) aps_[size_].info.wpsAdvertised = false;
-        aps_[size_].firstSeenUs = obs.seenUs;
-        ++size_;
+        if (size_ == kMaxAps) {
+            size_t victim = kMaxAps;
+            for (size_t i = 0; i < size_; ++i) {
+                const auto state = classify(aps_[i]);
+                if (state != Classification::NoSignature && state != Classification::InsufficientData) continue;
+                if (!std::memcmp(aps_[i].info.bssid, protected_[0], 6) ||
+                    !std::memcmp(aps_[i].info.bssid, protected_[1], 6)) continue;
+                if (victim == kMaxAps || aps_[i].lastSeenUs < aps_[victim].lastSeenUs ||
+                    (aps_[i].lastSeenUs == aps_[victim].lastSeenUs && aps_[i].info.rssi < aps_[victim].info.rssi)) victim = i;
+            }
+            if (victim == kMaxAps) { ++dropped_; return nullptr; }
+            index = victim; ++replacements_;
+        } else ++size_;
+        aps_[index] = AccessPoint{};
+        aps_[index].info = obs;
+        aps_[index].discoveryOrder = nextDiscovery_++;
+        if (obs.malformed) aps_[index].info.wpsAdvertised = false;
+        aps_[index].firstSeenUs = obs.seenUs;
     }
     auto& ap = aps_[index];
     ++ap.advertisements;

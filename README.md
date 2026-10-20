@@ -6,7 +6,9 @@ Built for **M5Stack Cardputer ADV** and the **original Cardputer** (ESP32-S3), w
 
 > **Authorized use only:** Test networks you own or have explicit permission to assess. Radar helps with security inventory and planning vendor firmware updates. Advertised fingerprints are evidence, not a verdict on vulnerability, patch status or safety.
 
-**Version 1.0.12** · [MIT license](LICENSE) · [All releases](https://github.com/lexejs/broadcom-radar/releases)
+**Published release 1.0.12** · [MIT license](LICENSE) · [All releases](https://github.com/lexejs/broadcom-radar/releases)
+
+Development source: **1.0.13**, not yet published as a release. The downloads below remain the published 1.0.12 images.
 
 [Download](#download-and-choose-a-firmware) · [Get started](#quick-start) · [Read the results](#meaning-of-results) · [Controls](#controls) · [FAQ](#frequently-asked-questions) · [Research](RESEARCH.md)
 
@@ -222,7 +224,7 @@ No. The ESP32-S3 receives **2.4 GHz Wi-Fi only**. The ready-made builds use PL c
 
 ### Why does the list stop at 128 networks?
 
-Radar keeps a bounded store of **128 distinct BSSIDs**. Existing entries keep updating when full; new ones are dropped and counted. Filters do not free slots. Press R twice within three seconds to clear live records while keeping saved files. An immediately recognizable new Broadcom detection can still be archived outside a full list.
+Radar keeps a bounded store of **128 distinct BSSIDs**. Existing entries keep updating when full. Since development version 1.0.13, a new BSSID can replace the least recently seen `NONE` or `WAIT` record (weakest RSSI breaks age ties). Broadcom findings, WPS records, the current selection and a confirmed test target are protected. If all entries are protected, new observations are dropped and counted. Scan diagnostics and JSON report replacements separately. Filters do not free slots. Press R twice within three seconds to clear live records while keeping saved files. An immediately recognizable new Broadcom detection can still be archived outside a full list.
 
 ### Can it tell whether a router runs hostapd?
 
@@ -246,7 +248,7 @@ Optional `-T`, `-C` and `-F` images can transmit during a **manually confirmed t
 | Transport experiment | `-C` | Scoped driver compatibility; stops at WSC Start |
 | Implementation fingerprint | `-F` | Compatible transport and one empty WPS first fragment; family candidate only |
 
-Local builds generate the same filenames under `dist/`; generated files are excluded from source history. The sizes below describe the development build. Release and CI builds can differ; use the manifest shipped with your exact image.
+Local builds generate the same filenames under `dist/`; generated files are excluded from source history. The sizes below record the 1.0.12 development build. Current local artifacts use the development version in the source. Release and CI builds can differ; use the manifest shipped with your exact image.
 
 | Hardware | Application image | Size |
 | --- | --- | --- |
@@ -308,7 +310,7 @@ All eight development images require an OTA app slot of at least **1,048,576 byt
 - Idle STA mode is initialized directly through ESP-IDF. Wi-Fi storage is RAM, NVS credential loading is disabled, and station configuration is empty. No default station network interface or reconnect event handler is created. `esp_wifi_start()` initializes the idle station control block; only `esp_wifi_connect()` would initiate connection/scanning, and that API is not called. `esp_wifi_scan_start()` is also absent.
 - The default receive callback accepts only management Beacon/Probe Response frames, checks driver error state and lengths, copies into a **12-frame static FreeRTOS queue** with zero wait, and returns. During a manually started experimental test it also admits selected-AP session replies and EAPOL addressed to this device. Processing, drawing and SD writes happen in the Arduino loop. A driver-owned buffer pointer is never retained.
 - Raw frame capacity: **2304 bytes**, excluding FCS. Oversized advertisements are dropped and counted. IDF 4.4.7 `sig_len` includes FCS, so the callback strips its final four bytes before parsing/PCAP.
-- AP capacity: **128 BSSIDs**, retained until R/restart. At capacity, existing BSSIDs continue to update; observations of new BSSIDs are dropped and counted. Identical SSIDs do not merge different BSSIDs. Evidence is cumulative; later missing or malformed fields never erase confirmed evidence. RSSI uses the latest observation; maximum RSSI is also retained.
+- AP capacity: **128 BSSIDs** at a time. At capacity, old `NONE`/`WAIT` records can be replaced; Broadcom/WPS records, the current selection and test target are protected. All-protected capacity still drops new observations. Replacements start with empty evidence and a new discovery position; they are counted separately from drops. Identical SSIDs do not merge different BSSIDs. Evidence is cumulative; later missing or malformed fields never erase confirmed evidence. RSSI uses the latest observation; maximum RSSI is also retained.
 - WPS reassembly: **1024 bytes per advertisement**; text fields: **64 bytes each**; SSID: **32 raw bytes**; vendor IE summaries: **8 per AP**. Oversized text is marked truncated and cannot match a default identity by prefix. Complete nonempty identity fields are retained by completeness/length, not replaced by missing fields. Different matching identity fields across complete advertisements can combine into the default-identity signature; the field mask is exported.
 - Malformed advertisements contribute only attributable metadata and counters, not WPS identity/evidence. A later complete advertisement resolves an initially inconclusive entry. Invalid headers, unsupported frame types, invalid BSSIDs and fragmented/protected management frames are discarded. Empty WPS attribute payloads are inconclusive.
 - All parser, AP, queue and PCAP storage is bounded. The parsers and aggregation allocate no heap memory. Library initialization and bounded keyboard/SD internals use heap memory. Wi-Fi receive buffers are reduced to four static/eight dynamic buffers and AMPDU reception is disabled. USB serial emits uptime, free/minimum heap and drop counters every five seconds for on-device stability checks.

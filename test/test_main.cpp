@@ -116,11 +116,22 @@ void storeTests() {
     CHECK(store.at(0).info.ssid.length == 0 && !store.at(0).info.malformed);
     store.clear();
     for (size_t i = 1; i <= kMaxAps; ++i) CHECK(store.observe(parse(beacon({'x'}, i))));
-    CHECK(!store.observe(parse(beacon({'x'}, 200))));
-    CHECK(store.size() == kMaxAps && store.dropped() == 1);
+    store.protect(store.at(0).info.bssid, store.at(1).info.bssid);
+    auto incoming = beacon({'n'}, 200); proprietary(incoming);
+    CHECK(store.observe(parse(incoming)));
+    CHECK(store.size() == kMaxAps && store.dropped() == 0 && store.replacements() == 1);
+    CHECK(store.at(0).info.bssid[5] == 1 && store.at(1).info.bssid[5] == 2);
+    CHECK(store.at(2).info.bssid[5] == 200 && store.at(2).advertisements == 1);
+    CHECK(store.at(2).info.evidence == ProprietaryIe && store.at(2).discoveryOrder == kMaxAps);
     CHECK(store.observe(parse(beacon({'x'}, 1))));
     CHECK(store.at(0).advertisements == 2);
-    store.clear(); CHECK(store.size() == 0 && store.dropped() == 0);
+    store.clear(); CHECK(store.size() == 0 && store.dropped() == 0 && store.replacements() == 0);
+    for (size_t i = 1; i <= kMaxAps; ++i) { auto protectedAp = beacon({'b'}, i); proprietary(protectedAp); CHECK(store.observe(parse(protectedAp))); }
+    CHECK(!store.observe(parse(incoming)) && store.dropped() == 1 && store.replacements() == 0);
+    store.clear();
+    for (size_t i = 1; i <= kMaxAps; ++i) { auto wpsAp = parse(ordinaryWps()); wpsAp.bssid[5] = uint8_t(i); CHECK(store.observe(wpsAp)); }
+    CHECK(!store.observe(parse(incoming)) && store.dropped() == 1 && store.replacements() == 0);
+    store.clear();
     auto vendors = beacon(); for (int i=0;i<12;++i) ie(vendors,221,{uint8_t(i),1,2,3});
     CHECK(parse(vendors).vendorCount == 8 && parse(vendors).vendorOverflow);
 }
@@ -273,9 +284,9 @@ void detectionTests(const char* output) {
     CHECK(ring.enabled() && ring.size()==1);
     CHECK(exporter.saveDetection(observation,ap,frame,stats,"Cardputer ADV"));
     CHECK(ring.enabled() && ring.size()==1);
-    // Even a new BRCM BSSID outside a full display table is archived directly.
+    // Even a new BRCM BSSID outside an all-protected display table is archived directly.
     store.clear();
-    for(size_t i=1;i<=kMaxAps;++i) CHECK(store.observe(parse(beacon({'x'},i))));
+    for(size_t i=1;i<=kMaxAps;++i) { auto protectedAp=beacon({'x'},i); proprietary(protectedAp); CHECK(store.observe(parse(protectedAp))); }
     bytes=beacon({'F'},200); proprietary(bytes); observation=parse(bytes); ap=store.observe(observation); setFrame(bytes);
     CHECK(!ap && store.size()==kMaxAps && store.dropped()==1);
     CHECK(exporter.saveDetection(observation,ap,frame,stats,"Cardputer ADV"));
@@ -549,7 +560,7 @@ void uiStateTests() {
     CHECK(M5Cardputer.Display.lines[8].find("Scan:")==0);
     mock::result=ESP_OK; key("s"); CHECK(!scanner.stats().running);
     mock::nowUs+=6000000; tick(); CHECK(M5Cardputer.Display.lines[8].find("F:ALL")==0);
-    key("h"); key("d"); CHECK(M5Cardputer.Display.lines[8]=="No scan API error"); key("`");
+    key("h"); key("d"); CHECK(M5Cardputer.Display.lines[8]=="AP replacements: 0"); key("`");
     // Export completion identifies all requested formats within 26 cells.
     key("p"); key("e"); while(exporter.busy()) tick();
     CHECK(M5Cardputer.Display.lines[8]=="Saved scan-001 J/C/P");
@@ -567,13 +578,17 @@ void uiStateTests() {
     CHECK(mock::files.size()==fileCount);
     // The full-list warning reports capacity independently of filtering and queue loss.
     for(unsigned i=1;i<=129;++i) store.observe(parse(beacon(text("AP"),uint8_t(i))));
-    tick(); CHECK(store.size()==128 && store.dropped()==1);
+    tick(); CHECK(store.size()==128 && store.dropped()==0 && store.replacements()==1);
     CHECK(M5Cardputer.Display.lines[2].find("FULL")!=std::string::npos);
+    enter(); const auto selectedMac=M5Cardputer.Display.lines[3]; key("`");
+    auto later=beacon(text("New BRCM"),200); proprietary(later); CHECK(store.observe(parse(later))); tick();
+    enter(); CHECK(M5Cardputer.Display.lines[3]==selectedMac); key("`");
     ui.notify("Saved brcm-001 + PCAP"); key("f");
     CHECK(M5Cardputer.Display.lines[0].find("WPS")!=std::string::npos);
     CHECK(M5Cardputer.Display.lines[4]=="No matching networks");
     key("h"); key("d");
-    CHECK(M5Cardputer.Display.lines[2]=="New AP ads dropped: 1");
+    CHECK(M5Cardputer.Display.lines[2]=="New AP ads dropped: 0");
+    CHECK(M5Cardputer.Display.lines[8]=="AP replacements: 2");
     CHECK(M5Cardputer.Display.lines[3].find("RX queue drops:")==0); secondary();
 }
 void uiDisplayPowerTests() {

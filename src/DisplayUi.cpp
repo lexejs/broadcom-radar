@@ -99,15 +99,20 @@ void DisplayUi::updateOrder(const AccessPointStore& store) {
     const size_t selectedIndex = selected_ < orderedCount_ ? ordered_[selected_] : kMaxAps;
     orderedCount_ = selected_ = 0;
     for (size_t group = 0; group < sizeof(kDetectionBadges) / sizeof(kDetectionBadges[0]); ++group) {
+        const size_t start = orderedCount_;
         for (size_t i = 0; i < store.size(); ++i) {
             const auto& ap = store.at(i);
             if (filter_ != Filter::All && wpsTargetError(ap.info)) continue;
             if (filter_ == Filter::BroadcomWps && classify(ap) != Classification::BroadcomSignature) continue;
             if (detectionGroup(ap) != group) continue;
-            if (i == selectedIndex) selected_ = orderedCount_;
-            ordered_[orderedCount_++] = static_cast<uint8_t>(i);
+            size_t position = orderedCount_++;
+            while (position > start && store.at(ordered_[position - 1]).discoveryOrder > ap.discoveryOrder) {
+                ordered_[position] = ordered_[position - 1]; --position;
+            }
+            ordered_[position] = static_cast<uint8_t>(i);
         }
     }
+    for (size_t i = 0; i < orderedCount_; ++i) if (ordered_[i] == selectedIndex) selected_ = i;
 }
 void DisplayUi::detail(const AccessPoint& ap, const ScanStats& stats) {
     const auto& a = ap.info;
@@ -334,7 +339,8 @@ void DisplayUi::draw(const AccessPointStore& store, const ScanStats& s, const Ex
         line(4, "Oversize frames: %u", s.oversizeDrops); line(5, "Bad ads:%u Rejected:%u", s.malformed, s.rejected);
         line(6, "PCAP: %u/%u %s", unsigned(ring.size()), unsigned(kPcapDepth), ring.enabled() ? "ON" : "OFF");
         line(7, "Broadcom APs: %u", unsigned(store.broadcomCount()));
-        line(8, "%s", scannerError_[0] ? scannerError_ : "No scan API error");
+        if (scannerError_[0]) line(8, "%s", scannerError_);
+        else line(8, "AP replacements: %u", store.replacements());
     } else if (screen_ == Screen::Channel) {
         line(0, "CHANNEL MODE"); foreground_ = TFT_WHITE; background_ = TFT_BLACK;
         line(1, "Country:%s Channels:1-%u", RADAR_COUNTRY, s.channelCount);
@@ -560,7 +566,7 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
                 if (c == 'e') {
                     resumeAfterExport_ = scanner.stats().running;
                     if (resumeAfterExport_ && !setRunning(scanner, false)) continue;
-                    auto stats = scanner.stats(); stats.rejected = rejected; stats.malformed = malformed; stats.storeDrops = store.dropped();
+                    auto stats = scanner.stats(); stats.rejected = rejected; stats.malformed = malformed; stats.storeDrops = store.dropped(); stats.storeReplacements = store.replacements();
                     const bool started = exporter.start(store, stats, ring, hardware);
                     notify(exporter.message());
                     if (!started && resumeAfterExport_) setRunning(scanner, true);
@@ -569,6 +575,12 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
             }
         }
     }
+    const uint8_t* selected = selected_ < orderedCount_ ? store.at(ordered_[selected_]).info.bssid : nullptr;
+    const uint8_t* target = nullptr;
+#if RADAR_WPS_PROBE
+    if (probe_ && (screen_ == Screen::ProbeConfirm || probe_->busy())) target = probeTarget_.bssid;
+#endif
+    store.protect(selected, target);
     bool keepVisible = exporting || exporter.busy() || screen_ == Screen::Display;
 #if RADAR_WPS_PROBE
     keepVisible |= probe_ && (content == Screen::ProbeConfirm || probe_->busy());

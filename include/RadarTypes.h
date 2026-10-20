@@ -18,7 +18,7 @@
 #endif
 
 namespace radar {
-constexpr const char* kFirmwareVersion = "1.0.12";
+constexpr const char* kFirmwareVersion = "1.0.13";
 constexpr const char* kFirmwareVariant = RADAR_WPS_PROBE ?
     (RADAR_DRIVER_COMPAT ? (RADAR_TRANSPORT_ONLY ? "C" : "F") : "T") : "P";
 constexpr size_t kMaxAps = 128;
@@ -66,6 +66,7 @@ struct Observation {
 };
 struct AccessPoint {
     Observation info;
+    uint32_t discoveryOrder = 0;
     uint64_t firstSeenUs = 0, lastSeenUs = 0;
     uint32_t advertisements = 0, completeAdvertisements = 0, malformedAdvertisements = 0;
     uint32_t beacons = 0, probeResponses = 0;
@@ -83,6 +84,7 @@ struct ScanStats {
     uint64_t startedUs = 0, nowUs = 0;
     uint32_t received = 0, queueDrops = 0, oversizeDrops = 0, rejected = 0, malformed = 0;
     uint32_t storeDrops = 0, discardedOnPause = 0;
+    uint32_t storeReplacements = 0;
     uint16_t listenedChannels = 0;
     uint8_t channel = 1, channelCount = 13;
     bool running = false, hopping = true;

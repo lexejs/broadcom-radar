@@ -9,10 +9,14 @@ public:
     const AccessPoint& at(size_t i) const { return aps_[i]; }
     size_t broadcomCount() const;
     uint32_t dropped() const { return dropped_; }
+    uint32_t replacements() const { return replacements_; }
+    void protect(const uint8_t* selected, const uint8_t* target = nullptr);
 private:
     AccessPoint aps_[kMaxAps]{};
     size_t size_ = 0;
     uint32_t dropped_ = 0;
+    uint32_t replacements_ = 0, nextDiscovery_ = 0;
+    uint8_t protected_[2][6]{};
 };
 class PcapRing {
 public:
