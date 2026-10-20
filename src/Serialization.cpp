@@ -1,4 +1,5 @@
 #include "Serialization.h"
+#include "GpsTracker.h"
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -49,7 +50,7 @@ bool u32(Sink& sink, uint32_t value) {
     return sink.write(bytes, 4);
 }
 bool jsonHeader(Sink& sink, const ScanStats& s, const char* hardware, const char* country,
-                bool pcapEnabled, size_t pcapFrames, uint32_t pcapOverwritten, bool detection) {
+                bool pcapEnabled, size_t pcapFrames, uint32_t pcapOverwritten, bool detection, bool gps) {
     Writer w{sink};
     w.raw("{\"schema_version\":1,\"firmware_version\":"); w.str(kFirmwareVersion);
     w.raw(",\"hardware\":"); w.str(hardware); w.raw(",\"mode\":\"passive-only\",\"country\":"); w.str(country);
@@ -67,16 +68,17 @@ bool jsonHeader(Sink& sink, const ScanStats& s, const char* hardware, const char
         w.str(pcapFrames == 2 ? "triggering_advertisement_with_companion" : "triggering_advertisement");
         w.fmt(",\"triggering_frame_index\":%u,", pcapFrames == 2 ? 1u : 0u);
     }
+    w.fmt("\"gps_pcapng_sidecar\":%s,\"position_scope\":\"receiver_position_at_observation\",", gps ? "true" : "false");
     w.raw("\"limits\":{\"max_aps\":128,\"queue_depth\":12,\"max_frame_bytes\":2304,\"wps_bytes_per_frame\":1024,\"wps_text_bytes\":64,\"vendor_summaries_per_ap\":8,\"pcap_depth\":16},");
     w.raw("\"limitations\":[\"Passive fingerprints do not establish vulnerability or safety\",\"2.4 GHz only; one channel at a time; advertisements can be missed\",\"Export pauses capture; full store can replace old NONE/WAIT records; protected records may fill all slots\",\"Malformed advertisements do not contribute identity or evidence\",\"OUI attribution is not implemented\",\"Binary strings use byte-wise JSON escapes; ssid_hex preserves exact bytes\",\"WPS text is bounded; vendor IEs are summaries, raw IEs require optional PCAP\",\"PCAP is a bounded recent snapshot with monotonic timestamps, without FCS or RadioTap\"],\"access_points\":[\n");
     return w.ok;
 }
 }
 bool writeJsonHeader(Sink& sink, const ScanStats& s, const char* hardware, const char* country, const PcapRing& ring) {
-    return jsonHeader(sink, s, hardware, country, ring.enabled(), ring.size(), ring.overwritten(), false);
+    return jsonHeader(sink, s, hardware, country, ring.enabled(), ring.size(), ring.overwritten(), false, ring.enabled() && ring.geotagged());
 }
-bool writeDetectionJsonHeader(Sink& sink, const ScanStats& s, const char* hardware, const char* country, bool companion) {
-    return jsonHeader(sink, s, hardware, country, true, companion ? 2 : 1, 0, true);
+bool writeDetectionJsonHeader(Sink& sink, const ScanStats& s, const char* hardware, const char* country, bool companion, bool gps) {
+    return jsonHeader(sink, s, hardware, country, true, companion ? 2 : 1, 0, true, gps);
 }
 bool writeJsonAp(Sink& sink, const AccessPoint& ap, bool first) {
     Writer w{sink}; const auto& a = ap.info; char mac[18]; renderMac(a.bssid, mac, sizeof(mac));
@@ -87,6 +89,16 @@ bool writeJsonAp(Sink& sink, const AccessPoint& ap, bool first) {
     w.fmt(",\"ssid_present\":%s,\"rssi_dbm\":%d,\"max_rssi_dbm\":%d,\"channel\":%u,\"capabilities\":%u,",
           a.ssidPresent ? "true" : "false", a.rssi, ap.maxRssi, a.channel, a.capabilities);
     w.raw("\"status\":"); w.str(classificationName(classify(ap)));
+    w.raw(",\"receiver_position\":");
+    if (a.receiver.validAt(ap.lastSeenUs)) {
+        char latitude[16], longitude[16], utc[24];
+        formatCoordinate(a.receiver.latitudeE7, latitude, sizeof(latitude));
+        formatCoordinate(a.receiver.longitudeE7, longitude, sizeof(longitude));
+        formatGpsUtc(a.receiver, utc, sizeof(utc));
+        w.fmt("{\"latitude\":%s,\"longitude\":%s,\"fix_received_us\":%llu,\"fix_age_ms\":%u,\"fix_utc\":",
+              latitude, longitude, (unsigned long long)a.receiver.receivedUs, unsigned((ap.lastSeenUs - a.receiver.receivedUs) / 1000));
+        w.str(utc); w.raw("}");
+    } else w.raw("null");
     w.raw(",\"wps_advertised\":"); w.str(wpsStateName(wpsState(ap)));
     w.raw(",\"wps\":{"); w.field("manufacturer", a.wps.manufacturer); w.raw(","); w.field("model_name", a.wps.modelName);
     w.raw(","); w.field("model_number", a.wps.modelNumber); w.raw(","); w.field("device_name", a.wps.deviceName);
@@ -124,7 +136,7 @@ bool writeJsonAp(Sink& sink, const AccessPoint& ap, bool first) {
 }
 bool writeJsonFooter(Sink& sink) { Writer w{sink}; w.raw("\n]}\n"); return w.ok; }
 bool writeCsvHeader(Sink& sink) {
-    Writer w{sink}; w.raw("bssid,ssid,ssid_hex,rssi_dbm,max_rssi_dbm,channel,capabilities,manufacturer,model_name,model_number,device_name,serial_number,uuid_e,uuid_r,wps_advertised,status,evidence,first_seen_us,last_seen_us,advertisements,complete_advertisements,malformed_advertisements\r\n"); return w.ok;
+    Writer w{sink}; w.raw("bssid,ssid,ssid_hex,rssi_dbm,max_rssi_dbm,channel,capabilities,manufacturer,model_name,model_number,device_name,serial_number,uuid_e,uuid_r,wps_advertised,status,evidence,first_seen_us,last_seen_us,advertisements,complete_advertisements,malformed_advertisements,receiver_latitude,receiver_longitude,gps_fix_utc,gps_fix_received_us,gps_fix_age_ms,position_scope\r\n"); return w.ok;
 }
 bool writeCsvAp(Sink& sink, const AccessPoint& ap) {
     Writer w{sink}; const auto& a = ap.info; char mac[18]; renderMac(a.bssid, mac, sizeof(mac));
@@ -137,9 +149,16 @@ bool writeCsvAp(Sink& sink, const AccessPoint& ap) {
     w.csv(wpsStateName(wpsState(ap))); w.raw(","); w.csv(classificationName(classify(ap))); w.raw(",\"");
     bool first = true;
     for (uint8_t bit = 1; bit <= 4; bit <<= 1) if (a.evidence & bit) { if (!first) w.raw(";"); first = false; w.raw(evidenceName(bit)); }
-    w.fmt("\",%llu,%llu,%u,%u,%u\r\n", (unsigned long long)ap.firstSeenUs, (unsigned long long)ap.lastSeenUs,
+    w.fmt("\",%llu,%llu,%u,%u,%u", (unsigned long long)ap.firstSeenUs, (unsigned long long)ap.lastSeenUs,
           ap.advertisements, ap.completeAdvertisements, ap.malformedAdvertisements);
-    return w.ok;
+    if (a.receiver.validAt(ap.lastSeenUs)) {
+        char latitude[16], longitude[16], utc[24];
+        formatCoordinate(a.receiver.latitudeE7, latitude, sizeof(latitude));
+        formatCoordinate(a.receiver.longitudeE7, longitude, sizeof(longitude)); formatGpsUtc(a.receiver, utc, sizeof(utc));
+        w.fmt(",%s,%s,%s,%llu,%u,receiver_position_at_observation", latitude, longitude, utc,
+              (unsigned long long)a.receiver.receivedUs, unsigned((ap.lastSeenUs - a.receiver.receivedUs) / 1000));
+    } else w.raw(",,,,,,");
+    w.raw("\r\n"); return w.ok;
 }
 bool writePcapHeader(Sink& s) {
     const uint8_t prefix[] = {0xd4,0xc3,0xb2,0xa1,2,0,4,0};
@@ -149,6 +168,43 @@ bool writePcapFrame(Sink& s, const Frame& f) {
     if (!isAdvertisement(f.bytes, f.length) || f.length < 36 || f.length > kMaxFrame) return false;
     return u32(s, f.timestampUs / 1000000ULL) && u32(s, f.timestampUs % 1000000ULL) &&
            u32(s, f.length) && u32(s, f.length) && s.write(f.bytes, f.length);
+}
+namespace {
+bool padding(Sink& s, size_t length) {
+    const uint8_t zero[3]{};
+    return s.write(zero, (4 - length % 4) % 4);
+}
+bool comment(Sink& s, const char* value, size_t length) {
+    return u32(s, (uint32_t(length) << 16) | 1) &&
+           s.write(reinterpret_cast<const uint8_t*>(value), length) && padding(s, length) && u32(s, 0);
+}
+}
+bool writePcapNgHeader(Sink& s) {
+    // pcapng 1.0 SHB/IDB, raw 802.11, default microsecond resolution.
+    static const char clock[] = "clock=monotonic_since_boot; coordinates=receiver_position";
+    const uint32_t length = 28 + ((sizeof(clock) - 1 + 3) & ~3u);
+    return u32(s, 0x0A0D0D0A) && u32(s, 28) && u32(s, 0x1A2B3C4D) && u32(s, 1) &&
+           u32(s, UINT32_MAX) && u32(s, UINT32_MAX) && u32(s, 28) &&
+           u32(s, 1) && u32(s, length) && u32(s, 105) && u32(s, kMaxFrame) &&
+           comment(s, clock, sizeof(clock) - 1) && u32(s, length);
+}
+bool writePcapNgFrame(Sink& s, const Frame& f) {
+    if (!isAdvertisement(f.bytes, f.length) || f.length < 36 || f.length > kMaxFrame) return false;
+    char text[192]; size_t size = 0;
+    if (f.receiver.validAt(f.timestampUs)) {
+        char latitude[16], longitude[16], utc[24];
+        formatCoordinate(f.receiver.latitudeE7, latitude, sizeof(latitude));
+        formatCoordinate(f.receiver.longitudeE7, longitude, sizeof(longitude));
+        formatGpsUtc(f.receiver, utc, sizeof(utc));
+        const int written = std::snprintf(text, sizeof(text), "receiver_latitude=%s receiver_longitude=%s gps_fix_utc=%s gps_fix_received_us=%llu",
+                                          latitude, longitude, utc, (unsigned long long)f.receiver.receivedUs);
+        if (written < 0 || size_t(written) >= sizeof(text)) return false;
+        size = written;
+    }
+    const uint32_t length = 32 + ((f.length + 3u) & ~3u) + (size ? 8 + ((size + 3u) & ~3u) : 0);
+    return u32(s, 6) && u32(s, length) && u32(s, 0) && u32(s, f.timestampUs >> 32) &&
+           u32(s, uint32_t(f.timestampUs)) && u32(s, f.length) && u32(s, f.length) &&
+           s.write(f.bytes, f.length) && padding(s, f.length) && (!size || comment(s, text, size)) && u32(s, length);
 }
 bool writeProbePcapFrame(Sink& s, const ProbeRecord& r) {
     if (!r.captured || r.captured > kProbeBytes || r.captured > r.original || r.original > kMaxFrame) return false;

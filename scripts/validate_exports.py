@@ -15,6 +15,7 @@ assert len(aps) == 3 and len({ap["bssid"] for ap in aps}) == 3
 assert aps[0]["status"] == "BROADCOM_SIGNATURE"
 assert aps[1]["wps"]["uuid_r"] == "000102030405060708090a0b0c0d0ebb"
 assert {item["name"] for item in aps[0]["evidence"]} == {"broadcom_proprietary_ie"}
+assert not report["gps_pcapng_sidecar"] and all(ap["receiver_position"] is None for ap in aps)
 assert aps[0]["metadata_sources"] == 1
 assert aps[0]["evidence"][0]["contributing_frame_types"] == ["beacon"]
 assert aps[0]["wps"]["manufacturer"] == "Example Vendor"
@@ -76,6 +77,74 @@ for subtype, timestamp in [(0x50, 1), (0x80, 2)]:
     offset += captured
 assert offset == len(data)
 print("PASS: paired same-BSSID Probe Response/Beacon PCAP, capture order and triggering frame index")
+
+# Independently decode optional GPS output, including block boundaries and options.
+for prefix, expected_count in [("gps-scan-001", 2), ("gps-detection-001", 1)]:
+    report = json.loads((root / (prefix + ".json")).read_text())
+    assert report["gps_pcapng_sidecar"] and report["position_scope"] == "receiver_position_at_observation"
+    position = report["access_points"][0]["receiver_position"]
+    assert abs(position["latitude"] - 48.1173) < 1e-7 and abs(position["longitude"] - 11.5166666) < 1e-7
+    assert position["fix_utc"] == "1994-03-23T12:35:19Z" and position["fix_age_ms"] == 100
+    rows = list(csv.DictReader((root / (prefix + ".csv")).open(newline="")))
+    assert len(rows) == 1 and None not in rows[0]
+    assert rows[0]["position_scope"] == report["position_scope"]
+    assert float(rows[0]["receiver_longitude"]) == position["longitude"]
+    classic = (root / (prefix + ".pcap")).read_bytes()
+    classic_frames = []
+    offset = 24
+    while offset < len(classic):
+        seconds, micros, captured, original = struct.unpack_from("<IIII", classic, offset)
+        offset += 16
+        classic_frames.append((seconds * 1_000_000 + micros, classic[offset:offset+captured]))
+        assert captured == original
+        offset += captured
+    data = (root / (prefix + ".pcapng")).read_bytes()
+    offset = 0
+    blocks = []
+    tagged = []
+    while offset < len(data):
+        kind, size = struct.unpack_from("<II", data, offset)
+        assert size >= 12 and size % 4 == 0 and offset + size <= len(data)
+        assert struct.unpack_from("<I", data, offset + size - 4)[0] == size
+        block = data[offset:offset+size]
+        blocks.append(kind)
+        if kind == 0x0A0D0D0A:
+            assert struct.unpack_from("<IHHQ", block, 8) == (0x1A2B3C4D, 1, 0, 0xFFFFFFFFFFFFFFFF)
+        elif kind == 1:
+            assert struct.unpack_from("<HHI", block, 8) == (105, 0, 2304)
+            assert b"clock=monotonic_since_boot" in block
+        elif kind == 6:
+            interface, high, low, captured, original = struct.unpack_from("<IIIII", block, 8)
+            index = len(tagged)
+            assert interface == 0 and 36 <= captured == original <= 2304
+            assert ((high << 32) | low, block[28:28+captured]) == classic_frames[index]
+            option_offset = 28 + ((captured + 3) & ~3)
+            assert block[28+captured:option_offset] == bytes(option_offset - 28 - captured)
+            comments = []
+            while option_offset < size - 4:
+                code, length = struct.unpack_from("<HH", block, option_offset)
+                option_offset += 4
+                if code == 0:
+                    assert length == 0 and option_offset == size - 4
+                    break
+                assert code == 1 and option_offset + length <= size - 4
+                comments.append(block[option_offset:option_offset+length].decode("ascii"))
+                option_offset += (length + 3) & ~3
+            assert option_offset == size - 4
+            tagged.append(bool(comments))
+            if comments:
+                fields = dict(item.split("=", 1) for item in comments[0].split())
+                assert float(fields["receiver_latitude"]) == position["latitude"]
+                assert float(fields["receiver_longitude"]) == position["longitude"]
+                assert fields["gps_fix_utc"] == position["fix_utc"]
+                assert int(fields["gps_fix_received_us"]) == position["fix_received_us"]
+        else:
+            raise AssertionError(kind)
+        offset += size
+    assert offset == len(data) and blocks == [0x0A0D0D0A, 1] + [6] * expected_count
+    assert tagged == ([False, True] if expected_count == 2 else [True])
+    assert len(classic_frames) == expected_count
+print("PASS: GPS receiver JSON/CSV, PCAPNG blocks/options and identical classic PCAP frame bytes")
 
 report = json.loads((root / "test-001.json").read_text())
 assert report["mode"] == "experimental-active-wps"

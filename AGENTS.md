@@ -31,7 +31,7 @@ Run the most specific useful checks for the changed behavior. Report what actual
 
 - Core firmware, UI or export changes: `bash scripts/test_host.sh` (ASan/UBSan, passive API audit and independent export decoding).
 - Build affected hardware and modes with PlatformIO Core 6.1.19 and the dependencies pinned in `platformio.ini`. ADV and original Cardputer use different keyboard readers. CI builds all eight environments.
-- UI preview changes: run `python3 scripts/render_readme_screenshots.py`; inspect the four PNGs, provenance and synthetic-data caption. The renderer requires the pinned M5GFX dependency from an ADV build; generating previews is not firmware validation.
+- UI preview changes: run `python3 scripts/render_readme_screenshots.py`; inspect the generated PNGs, provenance and synthetic-data caption. The renderer requires the pinned M5GFX dependency from an ADV build; generating previews is not firmware validation.
 - Documentation-only changes: check links, section anchors, Markdown rendering and `git diff --check`. Use a local preview or the GitHub Markdown API without publishing. Local firmware rebuilds are unnecessary when firmware and build inputs are unchanged.
 - Do not treat host tests, SD delivery readback or successful installation as proof of device startup, RF behavior, battery accuracy, recovery or long-duration stability.
 

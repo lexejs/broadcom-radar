@@ -1,11 +1,11 @@
 {
-  "firmware": "1.0.20",
+  "firmware": "1.0.21",
   "screens": [
     {
       "file": "network-list.png",
       "rows": [
         {
-          "text": "BRCM-RDR 1.0.20 P ALL",
+          "text": "BRCM-RDR 1.0.21 P ALL",
           "foreground": 1,
           "background": 3
         },
@@ -196,6 +196,106 @@
         },
         {
           "text": "Timer waits during tests",
+          "foreground": 1,
+          "background": 0
+        }
+      ]
+    },
+    {
+      "file": "field-indicators.png",
+      "rows": [
+        {
+          "text": "FIELD INDICATORS",
+          "foreground": 1,
+          "background": 3
+        },
+        {
+          "text": "RGB: OFF",
+          "foreground": 1,
+          "background": 3
+        },
+        {
+          "text": "Selected AP sound: OFF",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Settings reset on restart",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "ADV RGB needs light 255",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Sound waits for fresh AP",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Faster clicks: stronger RX",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "",
+          "foreground": 1,
+          "background": 0
+        }
+      ]
+    },
+    {
+      "file": "grove-gps.png",
+      "rows": [
+        {
+          "text": "GROVE GPS",
+          "foreground": 1,
+          "background": 3
+        },
+        {
+          "text": "Input: OFF",
+          "foreground": 1,
+          "background": 3
+        },
+        {
+          "text": "Receive pin: Grove G2",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Baud: 9600",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "GPS input disabled",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Receiver position, not AP",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Settings reset on restart",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Fixes:0 rejected:0",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "External module required",
           "foreground": 1,
           "background": 0
         }

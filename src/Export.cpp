@@ -64,7 +64,7 @@ bool Exporter::start(const AccessPointStore& store, const ScanStats& stats, cons
     detection_ = probe_ = false;
     if (!available_ && !mount()) return false;
     if (!nextSequence()) return false;
-    store_ = &store; ring_ = &ring; index_ = 0;
+    store_ = &store; ring_ = &ring; index_ = 0; gps_ = ring.enabled() && ring.geotagged();
     if (!open("json")) { fail("SD open failed"); return false; }
     FileSink sink(file_);
     if (!writeJsonHeader(sink, stats, hardware, stats.country, ring) || !sink.flush()) { fail("SD write failed"); return false; }
@@ -77,7 +77,7 @@ bool Exporter::nextSequence() {
     // Never overwrite a prior export, including interrupted .part files.
     while (sequence < 9999) {
         ++sequence; bool exists = false; char path[80];
-        for (const char* ext : {"json", "csv", "pcap"}) for (bool partial : {false, true}) {
+        for (const char* ext : {"json", "csv", "pcap", "pcapng"}) for (bool partial : {false, true}) {
             filename(path, sizeof(path), ext, partial); exists |= SD.exists(path);
         }
         if (!exists) return true;
@@ -112,10 +112,11 @@ bool Exporter::saveDetection(const Observation& observation, const AccessPoint* 
             single.captureChannels = 1 << (observation.captureChannel - 1);
         aggregate = &single;
     }
+    const bool gps = frame.receiver.validAt(frame.timestampUs) || (companion && companion->receiver.validAt(companion->timestampUs));
     bool good = open("json");
     if (good) {
         FileSink sink(file_);
-        good = writeDetectionJsonHeader(sink, stats, hardware, stats.country, companion != nullptr) &&
+        good = writeDetectionJsonHeader(sink, stats, hardware, stats.country, companion != nullptr, gps) &&
                writeJsonAp(sink, *aggregate, true) && writeJsonFooter(sink) && sink.flush();
     }
     file_.flush(); good = good && file_.getWriteError() == 0; file_.close();
@@ -129,8 +130,15 @@ bool Exporter::saveDetection(const Observation& observation, const AccessPoint* 
         FileSink sink(file_); good = writePcapHeader(sink) && (!companion || writePcapFrame(sink, *companion)) && writePcapFrame(sink, frame) && sink.flush();
     }
     file_.flush(); good = good && file_.getWriteError() == 0; file_.close();
-    // Publish JSON last: a final detection JSON means all three files were completed.
-    if (!good || !publishFile("pcap") || !publishFile("csv") || !publishFile("json")) {
+    if (good && gps) {
+        good = open("pcapng");
+        if (good) {
+            FileSink sink(file_); good = writePcapNgHeader(sink) && (!companion || writePcapNgFrame(sink, *companion)) && writePcapNgFrame(sink, frame) && sink.flush();
+        }
+        file_.flush(); good = good && file_.getWriteError() == 0; file_.close();
+    }
+    // Publish JSON last: all requested files, including a GPS sidecar, must be complete.
+    if (!good || (gps && !publishFile("pcapng")) || !publishFile("pcap") || !publishFile("csv") || !publishFile("json")) {
         fail("BRCM save failed; retrying"); return false;
     }
     size_t index = 0;
@@ -204,11 +212,23 @@ void Exporter::tick() {
         break;
     case Phase::Pcap:
         if (index_ < ring_->size()) good = writePcapFrame(sink, ring_->at(index_++));
-        else { good = sink.flush() && finishFile("pcap"); phase_ = Phase::Finish; }
+        else {
+            good = sink.flush() && finishFile("pcap");
+            phase_ = Phase::Finish;
+            if (good && gps_) {
+                good = open("pcapng");
+                if (good) { FileSink pcapng(file_); good = writePcapNgHeader(pcapng) && pcapng.flush(); }
+                phase_ = Phase::PcapNg; index_ = 0;
+            }
+        }
+        break;
+    case Phase::PcapNg:
+        if (index_ < ring_->size()) good = writePcapNgFrame(sink, ring_->at(index_++));
+        else { good = sink.flush() && finishFile("pcapng"); phase_ = Phase::Finish; }
         break;
     case Phase::Finish:
         phase_ = Phase::Idle;
-        std::snprintf(message_, sizeof(message_), "Saved scan-%03u %s", sequence_, ring_->enabled() ? "J/C/P" : "J/C; no P");
+        std::snprintf(message_, sizeof(message_), "Saved scan-%03u %s", sequence_, ring_->enabled() ? (gps_ ? "J/C/P/G" : "J/C/P") : "J/C; no P");
         return;
     default: return;
     }

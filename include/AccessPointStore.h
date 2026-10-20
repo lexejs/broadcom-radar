@@ -38,6 +38,10 @@ public:
     void clear() { count_ = next_ = 0; overwritten_ = 0; }
     void add(const Frame& frame);
     size_t size() const { return count_; }
+    bool geotagged() const {
+        for (size_t i = 0; i < count_; ++i) if (at(i).receiver.validAt(at(i).timestampUs)) return true;
+        return false;
+    }
     uint32_t overwritten() const { return overwritten_; }
     const Frame& at(size_t i) const { return frames_[(next_ + kPcapDepth - count_ + i) % kPcapDepth]; }
 private:

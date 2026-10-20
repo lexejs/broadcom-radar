@@ -5,6 +5,20 @@
 #include <iomanip>
 #include <iostream>
 
+namespace {
+struct PreviewIndicators : radar::IndicatorHardware {
+    void rgb(uint8_t, uint8_t, uint8_t) override {}
+    bool tone() override { return false; }
+    void silence() override {}
+};
+struct PreviewGps : radar::GpsInput {
+    bool start(uint8_t, uint32_t) override { return true; }
+    void stop() override {}
+    int available() override { return 0; }
+    int read() override { return -1; }
+    void discard() override {}
+};
+}
 int main() {
     using namespace radar;
     using namespace fixtures;
@@ -38,6 +52,9 @@ int main() {
     assert(exporter.mount());
     DisplayUi ui;
     assert(ui.begin());
+    PreviewIndicators indicatorHardware;
+    FieldIndicators indicators(indicatorHardware); ui.attachIndicators(indicators);
+    PreviewGps gpsInput; GpsTracker gps(gpsInput); ui.attachGps(gps);
     uint32_t rejected = 0, malformed = 1;
     auto tick = [&]() {
         mock::nowUs += 10000;
@@ -76,5 +93,10 @@ int main() {
     M5Cardputer.Keyboard.event("b");
     tick();
     capture("screen-settings.png");
+    auto key = [&](const char* text) {
+        M5Cardputer.Keyboard.event(""); tick(); M5Cardputer.Keyboard.event(text); tick();
+    };
+    key("b"); key("n"); capture("field-indicators.png");
+    key("`"); key("g"); capture("grove-gps.png");
     std::cout << "]}\n";
 }

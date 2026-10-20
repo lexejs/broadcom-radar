@@ -19,7 +19,7 @@ public:
     const char* probeMessage(const WpsProbe& probe) const;
     bool probeSaved(const WpsProbe& probe) const;
 private:
-    enum class Phase { Idle, Json, Csv, Pcap, Finish };
+    enum class Phase { Idle, Json, Csv, Pcap, PcapNg, Finish };
     class FileSink : public Sink {
     public:
         explicit FileSink(fs::File& file) : file_(file) {}
@@ -50,6 +50,7 @@ private:
     size_t index_ = 0;
     unsigned sequence_ = 0;
     unsigned detectionSequence_ = 0;
+    bool gps_ = false;
     bool detection_ = false;
     bool probe_ = false;
     unsigned probeSequence_ = 0;

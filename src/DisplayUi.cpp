@@ -240,10 +240,16 @@ void DisplayUi::textPage() {
     else line(8, "%u bytes; %s", unsigned(textBytes_), textLimited_ ? "source limited" : "complete value");
 }
 void DisplayUi::help(const ScanStats& s, const PcapRing& ring) {
-    if (helpReturn_ == Screen::Indicators) line(0, "INDICATOR HELP");
+    if (helpReturn_ == Screen::Gps) line(0, "GPS HELP");
+    else if (helpReturn_ == Screen::Indicators) line(0, "INDICATOR HELP");
     else line(0, "HELP %u/%u", helpPage_ + 1, kHelpPages);
     foreground_ = TFT_WHITE; background_ = TFT_BLACK;
-    if (helpReturn_ == Screen::Indicators) {
+    if (helpReturn_ == Screen::Gps) {
+        line(1, "Up/Down: choose setting"); line(2, "Enter/Left/Right: change");
+        line(3, "GPS TX -> chosen Grove RX"); line(4, "NMEA RMC; matching baud");
+        line(5, "3.3V logic; shared GND"); line(6, "OFF stops UART, not power");
+        line(7, "Esc: back; defaults OFF");
+    } else if (helpReturn_ == Screen::Indicators) {
         line(1, "Up/Down: choose indicator"); line(2, "Enter/Left/Right: toggle");
         line(3, "Green: receiver activity"); line(4, "Orange: new signature");
         line(5, "Sound: selected AP RSSI"); line(6, "Stale/paused: no clicks");
@@ -252,7 +258,7 @@ void DisplayUi::help(const ScanStats& s, const PcapRing& ring) {
         line(1, "; up . down , left / right"); line(2, "Enter: open / next / apply");
         line(3, "Esc / Backspace / `: back"); line(4, "H: help; Left/Right: page");
         line(5, "F: filter S: pause/resume"); line(6, "M:CH C:country P:PCAP");
-        line(7, "O:sort N:alerts");
+        line(7, "O:sort N:alerts G:GPS");
     } else if (helpPage_ == 1) {
         line(1, "ALL: all stored networks"); line(2, "WPS: test-ready APs");
         line(3, "B+W: BRCM + test-ready"); line(4, "B/P: Beacon/Probe Response");
@@ -349,6 +355,27 @@ void DisplayUi::draw(const AccessPointStore& store, const ScanStats& s, const Ex
     if (screen_ == Screen::Detail && selected_ < orderedCount_) detail(store.at(ordered_[selected_]), s);
     else if (screen_ == Screen::Text) textPage();
     else if (screen_ == Screen::Help) help(s, ring);
+    else if (screen_ == Screen::Gps && gps_) {
+        line(0, "GROVE GPS"); foreground_ = TFT_WHITE; background_ = TFT_BLACK;
+        background_ = gpsField_ == 0 ? TFT_NAVY : TFT_BLACK;
+        line(1, "Input: %s", gps_->enabled() ? "ON" : "OFF");
+        background_ = gpsField_ == 1 ? TFT_NAVY : TFT_BLACK;
+        line(2, "Receive pin: Grove G%u", gps_->pin());
+        background_ = gpsField_ == 2 ? TFT_NAVY : TFT_BLACK;
+        line(3, "Baud: %u", unsigned(gps_->baud())); background_ = TFT_BLACK;
+        const auto fix = gps_->at(s.nowUs);
+        if (fix.validAt(s.nowUs)) {
+            char latitude[16], longitude[16], utc[24];
+            formatCoordinate(fix.latitudeE7, latitude, sizeof(latitude));
+            formatCoordinate(fix.longitudeE7, longitude, sizeof(longitude)); formatGpsUtc(fix, utc, sizeof(utc));
+            line(4, "Lat: %s", latitude); line(5, "Lon: %s", longitude); line(6, "%s", utc);
+        } else {
+            line(4, gps_->error() ? "UART unavailable; OFF" : gps_->enabled() ? "Waiting for fresh RMC fix" : "GPS input disabled");
+            line(5, "Receiver position, not AP"); line(6, "Settings reset on restart");
+        }
+        line(7, "Fixes:%u rejected:%u", gps_->fixes(), gps_->rejected());
+        line(8, "External module required");
+    }
     else if (screen_ == Screen::Indicators && indicators_) {
         line(0, "FIELD INDICATORS"); foreground_ = TFT_WHITE; background_ = TFT_BLACK;
         background_ = indicatorField_ == 0 ? TFT_NAVY : TFT_BLACK;
@@ -542,6 +569,23 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
             }
         }
 #endif
+        else if (screen_ == Screen::Gps && gps_) {
+            if (esc) screen_ = gpsReturn_;
+            else {
+                if (up) gpsField_ = (gpsField_ + 2) % 3;
+                if (down) gpsField_ = (gpsField_ + 1) % 3;
+                if (left || right || keys.enter) {
+                    bool enabled = gps_->enabled(); uint8_t pin = gps_->pin(); uint32_t baud = gps_->baud();
+                    if (gpsField_ == 0) enabled = !enabled;
+                    else if (gpsField_ == 1) pin = pin == 1 ? 2 : 1;
+                    else {
+                        unsigned choice = 0; for (unsigned i = 0; i < 4; ++i) if (kGpsBauds[i] == baud) choice = i;
+                        baud = kGpsBauds[(choice + (left ? 3 : 1)) % 4];
+                    }
+                    gps_->configure(enabled, pin, baud);
+                }
+            }
+        }
         else if (screen_ == Screen::Indicators && indicators_) {
             if (esc) screen_ = indicatorsReturn_;
             else {
@@ -623,6 +667,7 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
                     filter_ = filter_ == Filter::All ? Filter::Wps : filter_ == Filter::Wps ? Filter::BroadcomWps : Filter::All;
                     updateOrder(store); screen_ = Screen::List;
                 }
+                if (c == 'g' && gps_) { gpsReturn_ = screen_; screen_ = Screen::Gps; break; }
                 if (c == 'n' && indicators_) { indicatorsReturn_ = screen_; screen_ = Screen::Indicators; break; }
                 if (c == 'o') { signalSort_ = !signalSort_; updateOrder(store); screen_ = Screen::List; notify(signalSort_ ? "Sort: signal within groups" : "Sort: discovery order"); }
                 if (c == 's') setRunning(scanner, !scanner.stats().running);
@@ -664,7 +709,7 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
     if (probe_ && (screen_ == Screen::ProbeConfirm || probe_->busy())) target = probeTarget_.bssid;
 #endif
     store.protect(selected, target);
-    bool keepVisible = exporting || exporter.busy() || screen_ == Screen::Display || screen_ == Screen::Country || screen_ == Screen::Indicators;
+    bool keepVisible = exporting || exporter.busy() || screen_ == Screen::Display || screen_ == Screen::Country || screen_ == Screen::Indicators || screen_ == Screen::Gps;
 #if RADAR_WPS_PROBE
     keepVisible |= probe_ && (content == Screen::ProbeConfirm || probe_->busy());
 #endif

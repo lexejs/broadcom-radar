@@ -7,8 +7,10 @@
 #endif
 #include "DisplayUi.h"
 #include "CardputerIndicators.h"
+#include "GroveGps.h"
 #include "WpsProbeRadio.h"
 #include <freertos/task.h>
+#include <esp_timer.h>
 
 namespace {
 radar::WifiScanner scanner;
@@ -20,6 +22,8 @@ radar::Exporter exporter;
 radar::DisplayUi ui;
 radar::CardputerIndicators indicatorHardware;
 radar::FieldIndicators indicators(indicatorHardware);
+radar::GroveGps gpsInput;
+radar::GpsTracker gps(gpsInput);
 radar::Frame frame;
 #if RADAR_WPS_PROBE
 radar::WpsProbe probe;
@@ -50,7 +54,7 @@ void setup() {
     M5Cardputer.Keyboard.begin(std::make_unique<IOMatrixKeyboardReader>());
 #endif
     const bool displayReady = ui.begin();
-    ui.attachIndicators(indicators);
+    ui.attachIndicators(indicators); ui.attachGps(gps);
 #if RADAR_WPS_PROBE
     ui.attachProbe(probe);
 #endif
@@ -76,14 +80,16 @@ void loop() {
 #if RADAR_WPS_PROBE
     if (probeRadio.tick(probe, scanner, exporter, frame, hardware)) ui.notify(exporter.message());
 #endif
-    scanner.tick();
+    scanner.tick(); gps.tick(esp_timer_get_time());
     if (!exporter.busy()) for (unsigned i = 0; i < 6 && scanner.pop(frame); ++i) {
 #if RADAR_WPS_PROBE
         if (probe.busy()) { probe.receive(frame); continue; }
 #endif
+        frame.receiver = gps.at(frame.timestampUs);
         radar::Observation observation;
         pcap.add(frame);
         if (parser.parse(frame.bytes, frame.length, frame.rssi, frame.channel, frame.timestampUs, observation)) {
+            observation.receiver = frame.receiver;
             if (observation.malformed) ++malformed;
             const auto* ap = store.observe(observation);
             auto stats = scanner.stats();

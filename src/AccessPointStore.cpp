@@ -86,7 +86,7 @@ const AccessPoint* AccessPointStore::observe(const Observation& obs) {
     ++ap.advertisements;
     if (obs.subtype == 8) ++ap.beacons; else ++ap.probeResponses;
     ap.lastSeenUs = obs.seenUs;
-    ap.info.rssi = obs.rssi;
+    ap.info.rssi = obs.rssi; ap.info.receiver = obs.receiver;
     if (obs.rssi > ap.maxRssi) ap.maxRssi = obs.rssi;
     if (obs.captureChannel >= 1 && obs.captureChannel <= 14) ap.captureChannels |= 1 << (obs.captureChannel - 1);
     if (obs.malformed) { ++ap.malformedAdvertisements; return &ap; }

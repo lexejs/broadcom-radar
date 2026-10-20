@@ -1,6 +1,7 @@
 #pragma once
 #include "Export.h"
 #include "FieldIndicators.h"
+#include "GpsTracker.h"
 #include "WifiScanner.h"
 #include <M5Cardputer.h>
 namespace radar {
@@ -8,6 +9,7 @@ class DisplayUi {
 public:
     bool begin();
     void attachIndicators(FieldIndicators& indicators) { indicators_ = &indicators; }
+    void attachGps(GpsTracker& gps) { gps_ = &gps; }
     const AccessPoint* selection(const AccessPointStore& store) const;
     bool rgbPowerAvailable() const;
     void notify(const char* message);
@@ -17,7 +19,7 @@ public:
     void tick(AccessPointStore& store, WifiScanner& scanner, Exporter& exporter,
               PcapRing& ring, uint32_t& rejected, uint32_t& malformed, const char* hardware);
 private:
-    enum class Screen { List, Detail, Channel, Country, Help, Text, Diagnostics, Display, Indicators, ProbeConfirm, Probe };
+    enum class Screen { List, Detail, Channel, Country, Help, Text, Diagnostics, Display, Indicators, Gps, ProbeConfirm, Probe };
     enum class Filter { All, Wps, BroadcomWps };
     struct Row {
         char text[27]{};
@@ -42,6 +44,9 @@ private:
     Screen screen_ = Screen::List;
     Screen helpReturn_ = Screen::List, modalReturn_ = Screen::List, diagnosticsReturn_ = Screen::List;
     FieldIndicators* indicators_ = nullptr;
+    GpsTracker* gps_ = nullptr;
+    unsigned gpsField_ = 0;
+    Screen gpsReturn_ = Screen::List;
     unsigned indicatorField_ = 0;
     Screen indicatorsReturn_ = Screen::List;
     Screen displayReturn_ = Screen::List;

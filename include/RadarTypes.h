@@ -21,7 +21,7 @@
 #endif
 
 namespace radar {
-constexpr const char* kFirmwareVersion = "1.0.20";
+constexpr const char* kFirmwareVersion = "1.0.21";
 constexpr const char* kCountries[] = {"01", "PL", "US", "JP", "DE", "GB", "FR", "CA", "AU", "AT", "BE", "BG", "BR", "CH", "CN", "CY", "CZ", "DK", "EE", "ES", "FI", "GR", "HK", "HR", "HU", "IE", "IN", "IS", "IT", "KR", "LI", "LT", "LU", "LV", "MT", "MX", "NL", "NO", "NZ", "PT", "RO", "SE", "SI", "SK", "TW"};
 constexpr size_t kCountryCount = sizeof(kCountries) / sizeof(kCountries[0]);
 constexpr const char* kFirmwareVariant = RADAR_WPS_PROBE ?
@@ -54,6 +54,14 @@ struct WpsIdentity {
     uint16_t attributes = 0;
 };
 struct VendorIe { uint8_t prefix[4]{}; uint8_t length = 0; };
+struct GeoFix {
+    uint64_t receivedUs = 0;
+    int32_t latitudeE7 = 0, longitudeE7 = 0;
+    uint32_t date = 0, seconds = 0;
+    bool validAt(uint64_t observationUs) const {
+        return receivedUs && date && observationUs >= receivedUs && observationUs - receivedUs <= 10000000;
+    }
+};
 struct Observation {
     uint8_t bssid[6]{};
     Bytes<32> ssid;
@@ -61,6 +69,7 @@ struct Observation {
     uint8_t channel = 0, captureChannel = 0, subtype = 0;
     uint16_t capabilities = 0;
     uint64_t seenUs = 0;
+    GeoFix receiver;
     bool ssidPresent = false, malformed = false, wpsAdvertised = false;
     uint8_t evidence = 0;
     WpsIdentity wps;
@@ -82,6 +91,7 @@ struct AccessPoint {
 };
 struct Frame {
     uint64_t timestampUs = 0;
+    GeoFix receiver;
     uint16_t length = 0;
     int8_t rssi = 0; // Populated by RX; empty buffers stay zero-initialized in BSS.
     uint8_t channel = 0;

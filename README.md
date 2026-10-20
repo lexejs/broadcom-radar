@@ -8,7 +8,7 @@ Built for **M5Stack Cardputer ADV** and the **original Cardputer** (ESP32-S3), w
 
 **Published release 1.0.12** · [MIT license](LICENSE) · [All releases](https://github.com/lexejs/broadcom-radar/releases)
 
-Development source: **1.0.20**, not yet published as a release. The downloads below remain the published 1.0.12 images.
+Development source: **1.0.21**, not yet published as a release. The downloads below remain the published 1.0.12 images.
 
 [Download](#download-and-choose-a-firmware) · [Get started](#quick-start) · [Read the results](#meaning-of-results) · [Controls](#controls) · [FAQ](#frequently-asked-questions) · [Research](RESEARCH.md)
 
@@ -37,11 +37,13 @@ The network list puts Broadcom observations first. Open a row to see which adver
 *Rendered from the production UI with synthetic example networks. Previews show the development version; published downloads can differ. These are not device photos or evidence of hardware validation.*
 
 <details>
-<summary>More screens: network details and display settings</summary>
+<summary>More screens: network details, display, alerts and GPS</summary>
 
 <p>
   <img src="docs/images/network-details.png" width="360" alt="Network summary with a synthetic name, BSSID, signal and WPS identity">
   <img src="docs/images/screen-settings.png" width="360" alt="Display settings with brightness, optional auto off and manual display blanking">
+  <img src="docs/images/field-indicators.png" width="360" alt="Optional RGB alerts and selected-AP sound, both disabled initially">
+  <img src="docs/images/grove-gps.png" width="360" alt="Optional Grove GPS receive pin and baud settings, input disabled initially">
 </p>
 
 </details>
@@ -148,6 +150,7 @@ The first key after screen-off only wakes the display. Scanning, channel hopping
 | E | Export JSON/CSV and optional PCAP; automatically pause capture and restore its prior state |
 | M | Choose `HOP` or hold one channel |
 | O | Toggle discovery order / strongest current RSSI within each detection group (development 1.0.15+) |
+| G | Optional Grove GPS input, receive pin and baud settings (development 1.0.21+) |
 | N | Optional RGB alerts and selected-AP sound settings (development 1.0.20+) |
 | C | Choose a supported country; Enter applies, Backspace cancels (development 1.0.14+) |
 | P | Toggle bounded PCAP capture, clearing the previous PCAP buffer |
@@ -172,6 +175,8 @@ Since 1.0.12, **B** opens screen settings from any screen. Brightness steps are 
 
 Development 1.0.20 adds **N** for optional RGB and sound indicators. Both start OFF and reset on restart. Green is a brief receiver-activity pulse, at most once per two seconds; orange marks new Broadcom evidence, at most five pulses per second. A bounded 32-BSSID alert history is separate from stored findings. On the original Cardputer RGB can work while the display is blank. On ADV the LED shares backlight power: RGB operates only with the display on at brightness 255, without changing backlight power to signal. Sound tracks the selected visible AP with short low-volume clicks, from about one every two seconds to five per second as current RSSI increases. Paused reception, no selection, an active test or a last observation older than 15 seconds stops audio and releases its driver. RSSI is not a distance or direction measurement. A failed audio start switches sound OFF. Enabling indicators uses additional power; hardware behavior and battery impact require device testing.
 
+
+Development 1.0.21 adds **G** for optional external Grove GPS input, initially OFF, GPIO2 RX at 9600 baud. Connect the module TX to the selected Grove signal (yellow G2 or white G1), use a common ground and 3.3 V UART logic, and power the module according to its own specification. The Grove red wire supplies 5 V; do not assume every module accepts it. Choose GPIO1/2 and 4800/9600/38400/115200 baud to match your module. UART is receive-only; Radar sends no configuration commands. OFF releases UART but does not switch the external 5 V supply. Settings reset on restart. Modules must emit checksum-protected NMEA RMC with an active fix; use WGS84 configuration. Invalid positions/dates, void or simulated/estimated/manual fixes and receipts older than ten seconds are excluded. The screen shows receiver coordinates and the UTC of the fix. No external module has been tested on hardware yet.
 
 Only changed rows are transferred to the display, at most twice per second for scan updates and immediately for key presses. Each row is composed in a reusable 240x15 RGB565 canvas (7,200 bytes), then sent without clearing the physical display. DMA completes before the buffer is reused. The existing font is scaled, so no additional font assets are linked. Builds use size optimization, LTO and disabled C++ exceptions. The M5GFX build hook keeps its include-dependent base class consistent across translation units for LTO.
 
@@ -201,6 +206,11 @@ Published 1.0.12 automatic PCAP contains **one triggering advertisement**, indep
 **E** creates `/broadcom-radar/scan-001.json` and `.csv`, then advances to an unused number. Existing final files and interrupted `.part` files are never overwritten. Writes use a 512-byte buffer and one AP or PCAP record per loop iteration. Each completed file is renamed from `.part`; SD errors keep partial files and leave capture usable. A JSON file may finish before a later CSV/PCAP write fails, so a complete set is indicated by all requested final filenames plus the `Saved` message.
 
 JSON includes schema/firmware/hardware, `passive-only`, monotonic timestamps, country, channel mode, channels listened to, receive/drop/malformed counters, bounds, limitations and all AP records. AP records contain BSSID, raw SSID hex, display string, capability flags, WPS fields/UUIDs, individual evidence with source descriptions, status, latest/maximum RSSI, observed channels and advertisement counts. Development 1.0.19 adds `contributing_frame_types` per evidence item; `metadata_sources` and `wps_sources` use bit 1 for Beacon and bit 2 for Probe Response. Default-identity field masks are retained separately by frame type, so combined evidence does not imply that either single frame contained the full signature. Malformed advertisements contribute no identity provenance. In scan/detection JSON, `mode: passive-only` describes the observations in that artifact, not the identity of the running firmware or all radio activity during the session. For reproducible research, retain the installed image name and its matching manifest alongside any separate experimental test reports.
+
+Development 1.0.21 adds nullable `receiver_position` in JSON and `receiver_latitude`, `receiver_longitude`, `gps_fix_utc`, `gps_fix_received_us`, `gps_fix_age_ms` and `position_scope` columns in CSV. These describe the **receiver position at the last AP observation**, not the AP location. Fix age is measured from receipt of the NMEA sentence; the UTC field is the fix time reported by the module. A later observation without a fresh fix clears its coordinate metadata. Existing historical observations retain the coordinates associated with that observation. Frames queued before a fix never receive that later fix, and UART backlog after a main-loop stall is discarded.
+
+Classic `.pcap` remains raw 802.11 with DLT 105. When at least one exported frame has a valid position, a matching `.pcapng` sidecar includes the same raw frames with receiver coordinates, fix UTC and receipt time in packet comments. Frames without a fix have no location comment. Capture timestamps retain the monotonic boot clock, explicitly identified in the interface comment; they are not UTC. `gps_pcapng_sidecar` records whether the sidecar was requested, and `G` in `Saved ... J/C/P/G` means it completed. Auto-detection JSON is published only after its requested sidecar and other files complete. GPS does not geotag experimental test reports. Coordinate accuracy, UART recovery and sustained operation require module/device validation.
+
 
 JSON strings preserve byte values with `\u00XX` escapes; they are not a UTF-8 interpretation of binary SSIDs. `ssid_hex` is authoritative for original bytes. CSV escapes binary bytes as `\xNN`, quotes fields and protects formula-leading values with an apostrophe. SSID hex remains unchanged. Vendor IEs are summarized by prefix/payload length; enable PCAP if the full received IE bytes are needed.
 
@@ -369,7 +379,7 @@ python3 -m venv .venv
 bash scripts/test_host.sh
 ```
 
-The post-build hook produces only application `.bin` files and SHA-256 manifests under `dist/`. Host checks compile production parsers, detector, store, serializers, scanner, UI and exporter with ASan/UBSan. Hardware seams use bounded mock queue, Wi-Fi, display/keyboard and SD backends. Tests cover synthetic signatures, malformed/truncated TLVs/IEs, binary/hidden SSIDs, BSSID separation, aggregation, overflow, callback buffer copying, hopping/hold, country restrictions, controls, no-SD/export faults, file non-overwrite and independent JSON/CSV/PCAP reads. They also exercise 50,000 deterministic damaged inputs. On macOS, LeakSanitizer is unsupported and disabled; address/undefined-behavior sanitizers remain enabled.
+The post-build hook produces only application `.bin` files and SHA-256 manifests under `dist/`. Host checks compile production parsers, detector, store, serializers, scanner, UI and exporter with ASan/UBSan. Hardware seams use bounded mock queue, Wi-Fi, display/keyboard and SD backends. Tests cover synthetic signatures, malformed/truncated TLVs/IEs, binary/hidden SSIDs, BSSID separation, aggregation, overflow, callback buffer copying, hopping/hold, country restrictions, controls, no-SD/export faults, RGB/sound defaults and timing, GPS NMEA validation/freshness/UART faults, GPS PCAPNG sidecars, file non-overwrite and independent JSON/CSV/PCAP reads. They also exercise 50,000 deterministic damaged inputs. On macOS, LeakSanitizer is unsupported and disabled; address/undefined-behavior sanitizers remain enabled.
 
 [GitHub Actions](.github/workflows/ci.yml) is configured to run host checks and build passive and experimental images for both hardware variants on Ubuntu 24.04. Its firmware artifacts contain application images and SHA-256 manifests. Releases are published separately with the selected binaries; CI does not automatically publish or install firmware. Verify the manifest for the exact image you install: a CI artifact is a separate build from a release image.
 
@@ -403,3 +413,5 @@ Host assertion counts include repeated checks, state transitions and 50,000 dete
 Original project code and documentation use the [MIT License](LICENSE). Third-party components keep their own licenses, linked under [build and automated checks](#build-and-automated-checks).
 
 The fingerprint rules independently implement published research by **Quentin Kaiser (qkaiser)**. See [broadcom-wps](https://github.com/qkaiser/broadcom-wps) and the [source provenance and matching rules](RESEARCH.md#primary-sources).
+
+GPS support follows the [u-blox NMEA RMC interface description](https://content.u-blox.com/sites/default/files/documents/u-blox-F9-HPG-1.51_InterfaceDescription_UBXDOC-963802114-13124.pdf). PCAPNG layout follows the [pcapng format specification](https://github.com/pcapng/pcapng); receiver-coordinate comments are project metadata, not an AP-position standard. Grove wiring is documented in the [Cardputer ADV pin map](https://docs.m5stack.com/en/core/Cardputer-Adv).

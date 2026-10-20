@@ -9,13 +9,15 @@ public:
 };
 bool writeJsonHeader(Sink& sink, const ScanStats& stats, const char* hardware,
                      const char* country, const PcapRing& ring);
-bool writeDetectionJsonHeader(Sink& sink, const ScanStats& stats, const char* hardware, const char* country, bool companion = false);
+bool writeDetectionJsonHeader(Sink& sink, const ScanStats& stats, const char* hardware, const char* country, bool companion = false, bool gps = false);
 bool writeJsonAp(Sink& sink, const AccessPoint& ap, bool first);
 bool writeJsonFooter(Sink& sink);
 bool writeCsvHeader(Sink& sink);
 bool writeCsvAp(Sink& sink, const AccessPoint& ap);
 bool writePcapHeader(Sink& sink);
 bool writePcapFrame(Sink& sink, const Frame& frame);
+bool writePcapNgHeader(Sink& sink);
+bool writePcapNgFrame(Sink& sink, const Frame& frame);
 bool writeProbeJson(Sink& sink, const WpsProbe& probe, const char* hardware);
 bool writeProbePcapFrame(Sink& sink, const ProbeRecord& record);
 }
