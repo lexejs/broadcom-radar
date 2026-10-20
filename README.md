@@ -8,7 +8,7 @@ Built for **M5Stack Cardputer ADV** and the **original Cardputer** (ESP32-S3), w
 
 **Published release 1.0.12** · [MIT license](LICENSE) · [All releases](https://github.com/lexejs/broadcom-radar/releases)
 
-Development source: **1.0.14**, not yet published as a release. The downloads below remain the published 1.0.12 images.
+Development source: **1.0.15**, not yet published as a release. The downloads below remain the published 1.0.12 images.
 
 [Download](#download-and-choose-a-firmware) · [Get started](#quick-start) · [Read the results](#meaning-of-results) · [Controls](#controls) · [FAQ](#frequently-asked-questions) · [Research](RESEARCH.md)
 
@@ -126,6 +126,7 @@ The labels describe **what Radar has observed**:
 | Buffer recent advertisements for the next scan export | **P**, then **E** |
 | Clear live data while keeping SD files | **R** twice within 3 seconds |
 | Show all networks, WPS candidates or Broadcom+WPS candidates | **F**: `ALL` → `WPS` → `B+W` |
+| Switch discovery / signal order within groups (development 1.0.15+) | **O** |
 | Choose the operating country (development 1.0.14+) | **C**, arrows, then **Enter** |
 | Adjust the screen or turn it off | **B** for settings; **L** to blank it |
 
@@ -144,6 +145,7 @@ The first key after screen-off only wakes the display. Scanning, channel hopping
 | R twice within 3 seconds | Clear live APs, counters and buffered PCAP; preserve SD files and running/paused state |
 | E | Export JSON/CSV and optional PCAP; automatically pause capture and restore its prior state |
 | M | Choose `HOP` or hold one channel |
+| O | Toggle discovery order / strongest current RSSI within each detection group (development 1.0.15+) |
 | C | Choose a supported country; Enter applies, Backspace cancels (development 1.0.14+) |
 | P | Toggle bounded PCAP capture, clearing the previous PCAP buffer |
 | H | Open or close five-page help, preserving the previous screen and page |
@@ -155,7 +157,7 @@ The first key after screen-off only wakes the display. Scanning, channel hopping
 
 On the compact keyboard, the arrow positions are **`;` up, `.` down, `,` left, `/` right**. These work directly or through the Fn arrow mapping. **Fn + backtick** is Escape; plain backtick and Backspace also return. Letter commands accept either case. Changes to scan state, filters, results and PCAP buffering are disabled during export; navigation remains available.
 
-The main screen shows firmware version, build variant (`P` passive, `T` stock test, `C` transport, `F` fingerprint), active filter, running state, channel mode, battery estimate, selection position, visible/stored AP count, Broadcom count and SD availability. A full 128-entry store displays `FULL`; scan diagnostics distinguish rejected new-AP advertisements from RX queue drops. Text remains 50% larger (9x12 cells), with five visible APs and explicit BRCM+WPS/BRCM/WPS/NONE/WAIT badges. Groups retain discovery order and preserve the selected AP when evidence changes its group. List rows show numeric RSSI in dBm. Long names and values have a visible `...` marker rather than silent clipping.
+The main screen shows firmware version, build variant (`P` passive, `T` stock test, `C` transport, `F` fingerprint), active filter, running state, channel mode, battery estimate, selection position, visible/stored AP count, Broadcom count and SD availability. A full 128-entry store displays `FULL`; scan diagnostics distinguish rejected new-AP advertisements from RX queue drops. Text remains 50% larger (9x12 cells), with five visible APs and explicit BRCM+WPS/BRCM/WPS/NONE/WAIT badges. Groups initially retain discovery order. Development 1.0.15 adds **O** to sort strongest current RSSI first within each group, with discovery order as the tie-breaker. The `RSSI` header marks this mode. The selected AP is preserved as signal values and groups change; scan-driven redraws remain limited to twice per second. Sorting does not change classification, filters or exports. List rows show numeric RSSI in dBm. Long names and values have a visible `...` marker rather than silent clipping.
 
 Only the main screen has a bottom keyboard-hint row. The seven named detail pages are SUMMARY, EVIDENCE, IDENTITY, UUID, ACTIVITY and two VENDOR IEs pages. The overview wraps SSIDs onto two rows; **V** opens a snapshot of the full selected bounded text, including escaped binary values. Up/Down select fields on SUMMARY and IDENTITY. Manual text paging keeps complete `\xNN` tokens together. Display shortening is distinct from source truncation, which the text viewer labels `source limited`. The remaining bottom rows contain data or status, with no keyboard footer.
 

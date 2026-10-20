@@ -39,6 +39,7 @@ private:
     Screen helpReturn_ = Screen::List, modalReturn_ = Screen::List, diagnosticsReturn_ = Screen::List;
     Screen displayReturn_ = Screen::List;
     Filter filter_ = Filter::All;
+    bool signalSort_ = false;
     uint8_t ordered_[kMaxAps]{};
     size_t orderedCount_ = 0;
     size_t selected_ = 0;

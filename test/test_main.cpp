@@ -475,6 +475,17 @@ void uiSortingTests() {
     store.observe(parse(beacon(text("Plain"),2))); store.observe(parse(first)); tick();
     CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS Broadcom-A")!=std::string::npos);
     CHECK(M5Cardputer.Display.boundsOk);
+    auto strong=beacon(text("Strong"),7); proprietary(strong); wps(strong,identity);
+    auto stronger=parse(strong); stronger.rssi=-20; store.observe(stronger); tick();
+    CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS Broadcom-A")!=std::string::npos);
+    key("o"); CHECK(M5Cardputer.Display.lines[0].find("RSSI")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find("BRCM+WPS Strong")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[4].find(">BRCM+WPS Broadcom-A")!=std::string::npos);
+    enter(); CHECK(M5Cardputer.Display.lines[1]=="Broadcom-A"); key("`");
+    auto moved=parse(first); moved.rssi=-10; store.observe(moved); tick();
+    CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS Broadcom-A")!=std::string::npos);
+    key("o"); CHECK(M5Cardputer.Display.lines[0].find("RSSI")==std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS Broadcom-A")!=std::string::npos);
 }
 void uiFilterTests() {
     WifiScanner scanner; CHECK(scanner.begin()); AccessPointStore store;

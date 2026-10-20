@@ -107,7 +107,11 @@ void DisplayUi::updateOrder(const AccessPointStore& store) {
             if (filter_ == Filter::BroadcomWps && classify(ap) != Classification::BroadcomSignature) continue;
             if (detectionGroup(ap) != group) continue;
             size_t position = orderedCount_++;
-            while (position > start && store.at(ordered_[position - 1]).discoveryOrder > ap.discoveryOrder) {
+            while (position > start) {
+                const auto& previous = store.at(ordered_[position - 1]);
+                const bool after = signalSort_ && previous.info.rssi != ap.info.rssi ?
+                    previous.info.rssi < ap.info.rssi : previous.discoveryOrder > ap.discoveryOrder;
+                if (!after) break;
                 ordered_[position] = ordered_[position - 1]; --position;
             }
             ordered_[position] = static_cast<uint8_t>(i);
@@ -229,7 +233,7 @@ void DisplayUi::help(const ScanStats& s, const PcapRing& ring) {
         line(1, "; up . down , left / right"); line(2, "Enter: open / next / apply");
         line(3, "Esc / Backspace / `: back"); line(4, "H: help; Left/Right: page");
         line(5, "F: filter S: pause/resume"); line(6, "M:CH C:country P:PCAP");
-        line(7, "R twice: clear live data");
+        line(7, "O:sort R twice:clear");
     } else if (helpPage_ == 1) {
         line(1, "ALL: all stored networks"); line(2, "WPS: test-ready APs");
         line(3, "B+W: BRCM + test-ready"); line(4, "BRCM: signature observed");
@@ -362,7 +366,7 @@ void DisplayUi::draw(const AccessPointStore& store, const ScanStats& s, const Ex
         line(8, "%s", channelError_[0] ? channelError_ : "Captured records are kept");
     } else {
         const char* filter = filter_ == Filter::All ? "ALL" : filter_ == Filter::Wps ? "WPS" : "B+W";
-        line(0, "BRCM-RDR %s %s %s", kFirmwareVersion, kFirmwareVariant, filter); background_ = TFT_BLACK;
+        line(0, "BRCM-RDR %s %s %s%s", kFirmwareVersion, kFirmwareVariant, filter, signalSort_ ? " RSSI" : ""); background_ = TFT_BLACK;
         line(1, "%s %s C%02u %d%% #%u", s.running ? "RUN" : "PAUSED", s.hopping ? "HOP" : "FIX", s.channel,
              M5Cardputer.Power.getBatteryLevel(), unsigned(orderedCount_ ? selected_ + 1 : 0));
         if (store.size() == kMaxAps) { foreground_ = TFT_ORANGE; line(2, "AP:%u/%u FULL SD:%s", unsigned(orderedCount_), unsigned(store.size()), ex.available() ? "OK" : "--"); }
@@ -569,6 +573,7 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
                     filter_ = filter_ == Filter::All ? Filter::Wps : filter_ == Filter::Wps ? Filter::BroadcomWps : Filter::All;
                     updateOrder(store); screen_ = Screen::List;
                 }
+                if (c == 'o') { signalSort_ = !signalSort_; updateOrder(store); screen_ = Screen::List; notify(signalSort_ ? "Sort: signal within groups" : "Sort: discovery order"); }
                 if (c == 's') setRunning(scanner, !scanner.stats().running);
                 if (c == 'r') {
                     if (!resetKey) continue;
