@@ -37,6 +37,7 @@ bool WifiScanner::begin() {
         error_ = "Unsupported regulatory policy"; return false;
     }
     firstChannel_ = channel_ = country.schan;
+    std::memcpy(country_, country.cc, 2); country_[2] = 0;
     unsigned last = country.schan + country.nchan - 1;
     lastChannel_ = last > 13 ? 13 : last;
     // Starting an idle STA creates its control block. It does not connect or scan.
@@ -108,6 +109,39 @@ bool WifiScanner::selectChannel(uint8_t channel) {
     nextHopUs_ = esp_timer_get_time() + kDwellMs * 1000ULL;
     return true;
 }
+bool WifiScanner::setCountry(const char* code) {
+    if (!ready_ || !code) return false;
+    bool supported = false;
+    for (const auto* known : kCountries) if (!std::strcmp(known, code)) supported = true;
+    if (!supported) { error_ = "Unsupported country"; ++errorCount_; return false; }
+    if (!std::strcmp(country_, code)) return true;
+    const bool wasRunning = running_;
+    if (wasRunning && !setRunning(false)) return false;
+    char previous[3]; std::memcpy(previous, country_, sizeof(previous));
+    const uint8_t previousChannel = channel_, previousFirst = firstChannel_, previousLast = lastChannel_;
+    auto restore = [&]() {
+        const bool restoredCountry = check(esp_wifi_set_country_code(previous, false));
+        const bool restoredChannel = check(esp_wifi_set_channel(previousChannel, WIFI_SECOND_CHAN_NONE));
+        channel_ = previousChannel; firstChannel_ = previousFirst; lastChannel_ = previousLast;
+        std::memcpy(country_, previous, sizeof(country_));
+        if (restoredCountry && restoredChannel && wasRunning) setRunning(true);
+        return false;
+    };
+    wifi_country_t chosen{};
+    bool applied = check(esp_wifi_set_country_code(code, false)) && check(esp_wifi_get_country(&chosen));
+    if (applied && (chosen.policy != WIFI_COUNTRY_POLICY_MANUAL || !chosen.schan || !chosen.nchan || chosen.schan > 13 || std::memcmp(chosen.cc, code, 2))) {
+        error_ = "Unsupported regulatory policy"; ++errorCount_; applied = false;
+    }
+    const unsigned last = chosen.schan + chosen.nchan - 1;
+    const uint8_t upper = last > 13 ? 13 : last;
+    const uint8_t selected = channel_ >= chosen.schan && channel_ <= upper ? channel_ : chosen.schan;
+    if (applied) applied = check(esp_wifi_set_channel(selected, WIFI_SECOND_CHAN_NONE));
+    if (!applied) return restore();
+    firstChannel_ = chosen.schan; lastChannel_ = upper; channel_ = selected;
+    std::memcpy(country_, code, sizeof(country_));
+    if (wasRunning && !setRunning(true)) return restore();
+    return true;
+}
 void WifiScanner::tick() {
     if (!ready_ || !running_ || !hopping_ || uint64_t(esp_timer_get_time()) < nextHopUs_) return;
     const uint8_t next = channel_ < lastChannel_ ? channel_ + 1 : firstChannel_;
@@ -123,6 +157,7 @@ void WifiScanner::clear() {
 }
 ScanStats WifiScanner::stats() const {
     ScanStats stats;
+    std::memcpy(stats.country, country_, sizeof(stats.country));
     stats.startedUs = startedUs_; stats.nowUs = esp_timer_get_time();
     stats.received = received_.load(std::memory_order_relaxed);
     stats.queueDrops = drops_.load(std::memory_order_relaxed);

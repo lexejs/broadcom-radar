@@ -103,6 +103,7 @@ void DisplayUi::updateOrder(const AccessPointStore& store) {
         for (size_t i = 0; i < store.size(); ++i) {
             const auto& ap = store.at(i);
             if (filter_ != Filter::All && wpsTargetError(ap.info)) continue;
+            if (filter_ != Filter::All && (ap.info.channel < firstAllowed_ || ap.info.channel > lastAllowed_)) continue;
             if (filter_ == Filter::BroadcomWps && classify(ap) != Classification::BroadcomSignature) continue;
             if (detectionGroup(ap) != group) continue;
             size_t position = orderedCount_++;
@@ -227,7 +228,7 @@ void DisplayUi::help(const ScanStats& s, const PcapRing& ring) {
     if (helpPage_ == 0) {
         line(1, "; up . down , left / right"); line(2, "Enter: open / next / apply");
         line(3, "Esc / Backspace / `: back"); line(4, "H: help; Left/Right: page");
-        line(5, "F: filter S: pause/resume"); line(6, "M: channel P: PCAP toggle");
+        line(5, "F: filter S: pause/resume"); line(6, "M:CH C:country P:PCAP");
         line(7, "R twice: clear live data");
     } else if (helpPage_ == 1) {
         line(1, "ALL: all stored networks"); line(2, "WPS: test-ready APs");
@@ -273,10 +274,12 @@ void DisplayUi::draw(const AccessPointStore& store, const ScanStats& s, const Ex
         foreground_ = TFT_WHITE; background_ = TFT_BLACK;
         line(1, "%s", ssid); line(2, "%s CH:%u", mac, target.channel);
         if (screen_ == Screen::ProbeConfirm) {
-            if (const char* reason = probe_->startError(target)) {
+            const char* reason = probe_->startError(target);
+            if (!reason && (target.channel < firstAllowed_ || target.channel > lastAllowed_)) reason = "Channel outside country";
+            if (reason) {
                 line(3, "TEST UNAVAILABLE"); line(4, "%s", reason);
                 if (!s.running) line(5, "Capture paused; return");
-                else if (target.channel < 1 || target.channel > 13) line(5, "Supported channels: 1-13");
+                else if (target.channel < firstAllowed_ || target.channel > lastAllowed_) line(5, "Check country settings");
                 else if (!std::strcmp(reason, "Invalid BSSID")) line(5, "Select a valid AP");
                 else if (target.malformed) line(5, "Needs complete AP data");
                 else if (!target.ssidPresent || hiddenSsid(target.ssid)) line(5, "Needs an observed name");
@@ -343,13 +346,20 @@ void DisplayUi::draw(const AccessPointStore& store, const ScanStats& s, const Ex
         else line(8, "AP replacements: %u", store.replacements());
     } else if (screen_ == Screen::Channel) {
         line(0, "CHANNEL MODE"); foreground_ = TFT_WHITE; background_ = TFT_BLACK;
-        line(1, "Country:%s Channels:1-%u", RADAR_COUNTRY, s.channelCount);
+        line(1, "Country:%s CH:%u-%u", s.country, firstAllowed_, s.channelCount);
         if (s.hopping) line(3, "Current: HOP (CH %02u)", s.channel);
         else line(3, "Current: HOLD CH %02u", s.channel);
         if (!channelChoice_) line(4, "Select: HOP all channels");
         else line(4, "Select: HOLD CH %02u", channelChoice_);
         line(6, "Hop dwell: %u ms", kDwellMs); line(7, "Selection not applied yet");
         line(8, "%s", channelError_[0] ? channelError_ : "Capture keeps current mode");
+    } else if (screen_ == Screen::Country) {
+        line(0, "COUNTRY SETTINGS"); foreground_ = TFT_WHITE; background_ = TFT_BLACK;
+        line(1, "Current: %s (%u-%u)", s.country, firstAllowed_, s.channelCount);
+        line(3, "Select: %s", kCountries[countryChoice_]);
+        line(4, "01 = world safe profile"); line(5, "Selection not applied yet");
+        line(6, "Settings reset on restart");
+        line(8, "%s", channelError_[0] ? channelError_ : "Captured records are kept");
     } else {
         const char* filter = filter_ == Filter::All ? "ALL" : filter_ == Filter::Wps ? "WPS" : "B+W";
         line(0, "BRCM-RDR %s %s %s", kFirmwareVersion, kFirmwareVariant, filter); background_ = TFT_BLACK;
@@ -416,6 +426,7 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
     }
     if (scanner.errorCount() != seenScanErrors_) scannerError(scanner);
     if (clearUntil_ && int32_t(clearUntil_ - millis()) <= 0) { clearUntil_ = 0; dirty_ = true; }
+    firstAllowed_ = scanner.firstChannel(); lastAllowed_ = scanner.stats().channelCount;
     updateOrder(store);
     Screen content = screen_ == Screen::Help ? helpReturn_ : screen_;
     if (content == Screen::Display) content = displayReturn_;
@@ -474,7 +485,8 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
                 else if (screen_ == Screen::Probe && probeDetails_) probeDetails_ = false;
                 else screen_ = modalReturn_;
             } else if (screen_ == Screen::ProbeConfirm && keys.enter && !exporter.busy()) {
-                if (probe_->request(probeTarget_)) { screen_ = Screen::Probe; probeDetails_ = false; }
+                if (!scanner.channelAllowed(probeTarget_.channel)) notify("Channel outside country");
+                else if (probe_->request(probeTarget_)) { screen_ = Screen::Probe; probeDetails_ = false; }
             } else if (screen_ == Screen::Probe) {
                 if (pressed('d') || left || right) probeDetails_ = !probeDetails_;
                 if (probe_->done() && pressed('e') && !exporter.probeSaved(*probe_)) {
@@ -510,6 +522,16 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
             else if (right || down || keys.enter) ++textPage_;
         } else if (screen_ == Screen::Diagnostics) {
             if (esc) screen_ = diagnosticsReturn_;
+        } else if (screen_ == Screen::Country) {
+            if (esc) screen_ = modalReturn_;
+            else {
+                if (up || left) { countryChoice_ = (countryChoice_ + kCountryCount - 1) % kCountryCount; channelError_[0] = 0; }
+                if (down || right) { countryChoice_ = (countryChoice_ + 1) % kCountryCount; channelError_[0] = 0; }
+                if (keys.enter && !exporter.busy()) {
+                    if (scanner.setCountry(kCountries[countryChoice_])) { scannerError_[0] = 0; screen_ = modalReturn_; }
+                    else { std::snprintf(channelError_, sizeof(channelError_), "Country apply failed"); scannerError(scanner); }
+                }
+            }
         } else if (screen_ == Screen::Channel) {
             if (esc) screen_ = modalReturn_;
             else {
@@ -562,6 +584,11 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
                     }
                 }
                 if (c == 'm') { modalReturn_ = screen_; channelChoice_ = scanner.stats().hopping ? 0 : scanner.stats().channel; channelError_[0] = 0; screen_ = Screen::Channel; }
+                if (c == 'c') {
+                    modalReturn_ = screen_; countryChoice_ = 0; channelError_[0] = 0;
+                    for (size_t i = 0; i < kCountryCount; ++i) if (!std::strcmp(kCountries[i], scanner.country())) countryChoice_ = i;
+                    screen_ = Screen::Country;
+                }
                 if (c == 'p') { ring.enable(!ring.enabled()); notify(ring.enabled() ? "PCAP buffering ON" : "PCAP buffering OFF"); }
                 if (c == 'e') {
                     resumeAfterExport_ = scanner.stats().running;
@@ -581,7 +608,7 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
     if (probe_ && (screen_ == Screen::ProbeConfirm || probe_->busy())) target = probeTarget_.bssid;
 #endif
     store.protect(selected, target);
-    bool keepVisible = exporting || exporter.busy() || screen_ == Screen::Display;
+    bool keepVisible = exporting || exporter.busy() || screen_ == Screen::Display || screen_ == Screen::Country;
 #if RADAR_WPS_PROBE
     keepVisible |= probe_ && (content == Screen::ProbeConfirm || probe_->busy());
 #endif

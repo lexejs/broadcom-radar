@@ -13,7 +13,7 @@ public:
     void tick(AccessPointStore& store, WifiScanner& scanner, Exporter& exporter,
               PcapRing& ring, uint32_t& rejected, uint32_t& malformed, const char* hardware);
 private:
-    enum class Screen { List, Detail, Channel, Help, Text, Diagnostics, Display, ProbeConfirm, Probe };
+    enum class Screen { List, Detail, Channel, Country, Help, Text, Diagnostics, Display, ProbeConfirm, Probe };
     enum class Filter { All, Wps, BroadcomWps };
     struct Row {
         char text[27]{};
@@ -47,6 +47,8 @@ private:
     uint32_t seenScanErrors_ = 0;
     uint32_t lastInput_ = 0;
     unsigned brightnessChoice_ = 3, idleChoice_ = 0, displayField_ = 0;
+    size_t countryChoice_ = 0;
+    uint8_t firstAllowed_ = 1, lastAllowed_ = 13;
     bool displayOn_ = true, consumeWakeKey_ = false;
     bool resumeAfterExport_ = false;
     char notice_[64] = "";

@@ -67,7 +67,7 @@ bool Exporter::start(const AccessPointStore& store, const ScanStats& stats, cons
     store_ = &store; ring_ = &ring; index_ = 0;
     if (!open("json")) { fail("SD open failed"); return false; }
     FileSink sink(file_);
-    if (!writeJsonHeader(sink, stats, hardware, RADAR_COUNTRY, ring) || !sink.flush()) { fail("SD write failed"); return false; }
+    if (!writeJsonHeader(sink, stats, hardware, stats.country, ring) || !sink.flush()) { fail("SD write failed"); return false; }
     phase_ = Phase::Json;
     std::snprintf(message_, sizeof(message_), "Saving scan-%03u; paused", sequence_);
     return true;
@@ -113,7 +113,7 @@ bool Exporter::saveDetection(const Observation& observation, const AccessPoint* 
     bool good = open("json");
     if (good) {
         FileSink sink(file_);
-        good = writeDetectionJsonHeader(sink, stats, hardware, RADAR_COUNTRY) &&
+        good = writeDetectionJsonHeader(sink, stats, hardware, stats.country) &&
                writeJsonAp(sink, *aggregate, true) && writeJsonFooter(sink) && sink.flush();
     }
     file_.flush(); good = good && file_.getWriteError() == 0; file_.close();

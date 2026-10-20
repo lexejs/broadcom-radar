@@ -8,7 +8,7 @@ Built for **M5Stack Cardputer ADV** and the **original Cardputer** (ESP32-S3), w
 
 **Published release 1.0.12** · [MIT license](LICENSE) · [All releases](https://github.com/lexejs/broadcom-radar/releases)
 
-Development source: **1.0.13**, not yet published as a release. The downloads below remain the published 1.0.12 images.
+Development source: **1.0.14**, not yet published as a release. The downloads below remain the published 1.0.12 images.
 
 [Download](#download-and-choose-a-firmware) · [Get started](#quick-start) · [Read the results](#meaning-of-results) · [Controls](#controls) · [FAQ](#frequently-asked-questions) · [Research](RESEARCH.md)
 
@@ -126,6 +126,7 @@ The labels describe **what Radar has observed**:
 | Buffer recent advertisements for the next scan export | **P**, then **E** |
 | Clear live data while keeping SD files | **R** twice within 3 seconds |
 | Show all networks, WPS candidates or Broadcom+WPS candidates | **F**: `ALL` → `WPS` → `B+W` |
+| Choose the operating country (development 1.0.14+) | **C**, arrows, then **Enter** |
 | Adjust the screen or turn it off | **B** for settings; **L** to blank it |
 
 The first key after screen-off only wakes the display. Scanning, channel hopping and automatic saves continue while the display is blank.
@@ -143,6 +144,7 @@ The first key after screen-off only wakes the display. Scanning, channel hopping
 | R twice within 3 seconds | Clear live APs, counters and buffered PCAP; preserve SD files and running/paused state |
 | E | Export JSON/CSV and optional PCAP; automatically pause capture and restore its prior state |
 | M | Choose `HOP` or hold one channel |
+| C | Choose a supported country; Enter applies, Backspace cancels (development 1.0.14+) |
 | P | Toggle bounded PCAP capture, clearing the previous PCAP buffer |
 | H | Open or close five-page help, preserving the previous screen and page |
 | B | Open screen settings: brightness, optional idle timeout, display off |
@@ -306,7 +308,7 @@ All eight development images require an OTA app slot of at least **1,048,576 byt
 ### Radio and memory decisions
 
 
-- Default country: **PL**, manual regulatory policy, channels **1-13**, 400 ms dwell. This matches the development location. Set `RADAR_COUNTRY` in `platformio.ini` to the actual operating country before rebuilding elsewhere. `esp_wifi_set_country_code(..., false)` applies the SDK country rules; the returned manual policy/range is verified. Hopping follows that range and never includes channel 14. An 11-channel country restricts the menu and hopping to 1-11.
+- Default country: **PL**, manual regulatory policy, channels **1-13**, 400 ms dwell. Development 1.0.14 adds **C** country settings without rebuilding: choose a supported SDK code (`01` is the world-safe profile), then Enter to apply. Capture pauses during application, a now-disallowed held channel moves to the first allowed one, and the prior running/paused and hopping/fixed modes are retained. API failures attempt to restore the previous configuration; failed restoration leaves capture paused with an error. Existing observations remain historical and are kept. Exports record the currently applied country. The choice is RAM-only and resets on restart; channel 14 remains excluded. This matches the development location. Set `RADAR_COUNTRY` in `platformio.ini` to the actual operating country before rebuilding elsewhere. `esp_wifi_set_country_code(..., false)` applies the SDK country rules; the returned manual policy/range is verified. Hopping follows that range and never includes channel 14. An 11-channel country restricts the menu and hopping to 1-11.
 - Idle STA mode is initialized directly through ESP-IDF. Wi-Fi storage is RAM, NVS credential loading is disabled, and station configuration is empty. No default station network interface or reconnect event handler is created. `esp_wifi_start()` initializes the idle station control block; only `esp_wifi_connect()` would initiate connection/scanning, and that API is not called. `esp_wifi_scan_start()` is also absent.
 - The default receive callback accepts only management Beacon/Probe Response frames, checks driver error state and lengths, copies into a **12-frame static FreeRTOS queue** with zero wait, and returns. During a manually started experimental test it also admits selected-AP session replies and EAPOL addressed to this device. Processing, drawing and SD writes happen in the Arduino loop. A driver-owned buffer pointer is never retained.
 - Raw frame capacity: **2304 bytes**, excluding FCS. Oversized advertisements are dropped and counted. IDF 4.4.7 `sig_len` includes FCS, so the callback strips its final four bytes before parsing/PCAP.

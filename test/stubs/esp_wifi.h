@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <cstring>
 #if RADAR_DRIVER_COMPAT
 extern "C" int ieee80211_raw_frame_sanity_check(int, const void*, int, bool);
 #endif
@@ -29,6 +30,7 @@ inline uint64_t nowUs = 1000000;
 inline uint8_t channel = 0;
 inline wifi_country_t country = {{'P','L',0},1,13,WIFI_COUNTRY_POLICY_MANUAL};
 inline int result = ESP_OK;
+inline bool failCountryOnce = false;
 inline int txResult = ESP_ERR_INVALID_ARG;
 inline std::vector<std::vector<uint8_t>> transmitted;
 inline int call(const char* name) { calls.emplace_back(name); return result; }
@@ -38,7 +40,16 @@ inline int esp_wifi_init(const wifi_init_config_t* c) { return c->nvs_enable == 
 inline int esp_wifi_set_storage(int v) { return v == WIFI_STORAGE_RAM ? mock::call("storage_ram") : ESP_FAIL; }
 inline int esp_wifi_set_mode(int v) { return v == WIFI_MODE_STA ? mock::call("mode_sta") : ESP_FAIL; }
 inline int esp_wifi_set_config(int, const wifi_config_t* c) { for (auto b : c->data) if (b) return ESP_FAIL; return mock::call("empty_station_config"); }
-inline int esp_wifi_set_country_code(const char*, bool enabled) { return enabled ? ESP_FAIL : mock::call("country_manual"); }
+inline int esp_wifi_set_country_code(const char* code, bool enabled) {
+    const int result = enabled ? ESP_FAIL : mock::call("country_manual");
+    if (mock::failCountryOnce) { mock::failCountryOnce=false; return ESP_FAIL; }
+    if (result == ESP_OK) {
+        std::memcpy(mock::country.cc, code, 2); mock::country.cc[2] = 0;
+        mock::country.schan = 1;
+        mock::country.nchan = !std::strcmp(code, "US") || !std::strcmp(code, "01") ? 11 : 13;
+    }
+    return result;
+}
 inline int esp_wifi_get_country(wifi_country_t* c) { *c = mock::country; return mock::call("get_country"); }
 inline int esp_wifi_start() { return mock::call("start_idle"); }
 inline int esp_wifi_set_ps(int) { return mock::call("ps_none"); }
@@ -50,8 +61,8 @@ inline int esp_wifi_set_promiscuous_filter(const wifi_promiscuous_filter_t* f) {
     return ESP_FAIL;
 }
 inline int esp_wifi_set_promiscuous_rx_cb(wifi_promiscuous_cb_t cb) { mock::callback = cb; return mock::call("register_callback"); }
-inline int esp_wifi_set_promiscuous(bool enabled) { mock::enabled = enabled; return mock::call(enabled ? "capture_on" : "capture_off"); }
-inline int esp_wifi_set_channel(uint8_t channel, int) { mock::channel = channel; return mock::call("set_channel"); }
+inline int esp_wifi_set_promiscuous(bool enabled) { const int result=mock::call(enabled ? "capture_on" : "capture_off"); if (!result) mock::enabled=enabled; return result; }
+inline int esp_wifi_set_channel(uint8_t channel, int) { const int result=mock::call("set_channel"); if (!result) mock::channel=channel; return result; }
 #if RADAR_WPS_PROBE
 inline int esp_wifi_get_mac(int, uint8_t* mac) {
     const uint8_t station[] = {2,0,0,0,0,0xee};

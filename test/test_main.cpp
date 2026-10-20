@@ -165,7 +165,16 @@ void scannerTests() {
     CHECK(scanner.setRunning(true));
     // Source-level API audit also forbids undeclared active APIs; mocks expose no such calls.
     CHECK(mock::calls.front()=="netif_init");
-    mock::country.nchan = 11; WifiScanner us; CHECK(us.begin()); CHECK(us.stats().channelCount==11 && !us.selectChannel(12));
+    WifiScanner us; CHECK(us.begin()); CHECK(us.selectChannel(13));
+    mock::failCountryOnce=true; CHECK(!us.setCountry("US"));
+    CHECK(us.stats().running && us.stats().channel==13 && std::string(us.country())=="PL");
+    CHECK(mock::channel==13 && std::string(mock::country.cc)=="PL");
+    CHECK(us.setCountry("US") && us.stats().channelCount==11 && !us.selectChannel(12));
+    CHECK(std::string(us.country())=="US" && std::string(us.stats().country)=="US");
+    CHECK(!us.stats().hopping && us.stats().channel==1 && us.stats().running);
+    CHECK(us.setRunning(false) && us.setCountry("JP") && !us.stats().running && us.stats().channelCount==13);
+    CHECK(!us.setCountry("ZZ") && std::string(us.country())=="JP");
+    CHECK(us.setCountry("PL"));
     mock::country.policy = WIFI_COUNTRY_POLICY_AUTO; WifiScanner bad; CHECK(!bad.begin());
     mock::country.policy = WIFI_COUNTRY_POLICY_MANUAL; mock::country.nchan=13;
     mock::result=ESP_FAIL; WifiScanner failed; CHECK(!failed.begin()); mock::result=ESP_OK;
@@ -397,6 +406,30 @@ void uiTests() {
     M5Canvas::failAllocation=true;
     DisplayUi noMemory; CHECK(!noMemory.begin());
     M5Canvas::failAllocation=false;
+}
+void uiCountryTests() {
+    WifiScanner scanner; CHECK(scanner.begin()); CHECK(scanner.setRunning(false));
+    AccessPointStore store; auto observation=parse(ordinaryWps()); observation.channel=13; store.observe(observation);
+    PcapRing ring; Exporter exporter; CHECK(exporter.mount()); DisplayUi ui; CHECK(ui.begin());
+    uint32_t rejected=0,malformed=0;
+    auto tick=[&]() { mock::nowUs+=600000;ui.tick(store,scanner,exporter,ring,rejected,malformed,"Cardputer ADV");M5Cardputer.Keyboard.changed=false; };
+    auto key=[&](const char* text) { M5Cardputer.Keyboard.event(text);tick(); };
+    auto enter=[&]() { M5Cardputer.Keyboard.event("");M5Cardputer.Keyboard.state.enter=true;tick(); };
+    key("c"); CHECK(M5Cardputer.Display.lines[0]=="COUNTRY SETTINGS");
+    CHECK(M5Cardputer.Display.lines[3]=="Select: PL");
+    key("/"); CHECK(M5Cardputer.Display.lines[3]=="Select: US" && std::string(scanner.country())=="PL");
+    key("h"); key("h"); CHECK(M5Cardputer.Display.lines[0]=="COUNTRY SETTINGS");
+    enter(); CHECK(std::string(scanner.country())=="US" && !scanner.stats().running && store.size()==1);
+    key("f"); CHECK(M5Cardputer.Display.lines[4]=="No matching networks"); key("f"); key("f");
+    key("c"); key("/"); key("`"); CHECK(std::string(scanner.country())=="US");
+    key("c"); key("/"); mock::result=ESP_FAIL; enter();
+    CHECK(M5Cardputer.Display.lines[0]=="COUNTRY SETTINGS" && !scanner.stats().running);
+    CHECK(std::string(scanner.country())=="US");
+    mock::result=ESP_OK; enter(); CHECK(std::string(scanner.country())=="JP" && !scanner.stats().running);
+    CHECK(scanner.setCountry("US")); mock::files.clear(); key("e"); while(exporter.busy()) tick();
+    const auto& json=mock::files.at("/broadcom-radar/scan-001.json");
+    CHECK(std::string(json.begin(),json.end()).find("\"country\":\"US\"")!=std::string::npos);
+    CHECK(M5Cardputer.Display.boundsOk);
 }
 void uiSortingTests() {
     WifiScanner scanner; CHECK(scanner.begin());
@@ -667,7 +700,7 @@ void uiDisplayPowerTests() {
 int main(int argc,char** argv) {
     try {
         parserTests(); storeTests(); scannerTests(); exportTests(argc>1?argv[1]:nullptr);
-        detectionTests(argc>1?argv[1]:nullptr); uiTests(); uiSortingTests(); uiFilterTests(); uiStateTests(); uiDisplayPowerTests(); corruptionTests();
+        detectionTests(argc>1?argv[1]:nullptr); uiTests(); uiCountryTests(); uiSortingTests(); uiFilterTests(); uiStateTests(); uiDisplayPowerTests(); corruptionTests();
         std::cout << "PASS: " << checks << " checks; 50,000 deterministic corrupt frames\n";
     } catch(const std::exception& e) { std::cerr << "FAIL: " << e.what() << '\n'; return 1; }
 }

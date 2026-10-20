@@ -1,6 +1,9 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#ifndef RADAR_COUNTRY
+#define RADAR_COUNTRY "PL"
+#endif
 #ifndef RADAR_WPS_PROBE
 #define RADAR_WPS_PROBE 0
 #endif
@@ -18,7 +21,9 @@
 #endif
 
 namespace radar {
-constexpr const char* kFirmwareVersion = "1.0.13";
+constexpr const char* kFirmwareVersion = "1.0.14";
+constexpr const char* kCountries[] = {"01", "PL", "US", "JP", "DE", "GB", "FR", "CA", "AU", "AT", "BE", "BG", "BR", "CH", "CN", "CY", "CZ", "DK", "EE", "ES", "FI", "GR", "HK", "HR", "HU", "IE", "IN", "IS", "IT", "KR", "LI", "LT", "LU", "LV", "MT", "MX", "NL", "NO", "NZ", "PT", "RO", "SE", "SI", "SK", "TW"};
+constexpr size_t kCountryCount = sizeof(kCountries) / sizeof(kCountries[0]);
 constexpr const char* kFirmwareVariant = RADAR_WPS_PROBE ?
     (RADAR_DRIVER_COMPAT ? (RADAR_TRANSPORT_ONLY ? "C" : "F") : "T") : "P";
 constexpr size_t kMaxAps = 128;
@@ -81,6 +86,7 @@ struct Frame {
     uint8_t bytes[kMaxFrame]{};
 };
 struct ScanStats {
+    char country[3] = RADAR_COUNTRY;
     uint64_t startedUs = 0, nowUs = 0;
     uint32_t received = 0, queueDrops = 0, oversizeDrops = 0, rejected = 0, malformed = 0;
     uint32_t storeDrops = 0, discardedOnPause = 0;

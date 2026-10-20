@@ -328,7 +328,11 @@ void uiResultTests() {
     // Unavailable targets show their real reason, with no misleading promise to wait.
     key("`"); store.clear(); auto invalid=target(advertisement()); invalid.channel=14; store.observe(invalid);
     key("t"); CHECK(M5Cardputer.Display.lines[4]=="Unsupported channel");
-    CHECK(M5Cardputer.Display.lines[5]=="Supported channels: 1-13"); secondary();
+    CHECK(M5Cardputer.Display.lines[5]=="Check country settings"); secondary();
+    key("`"); store.clear(); auto outside=target(advertisement()); outside.channel=13; store.observe(outside);
+    CHECK(scanner.setCountry("US")); key("t");
+    CHECK(M5Cardputer.Display.lines[4]=="Channel outside country"); enter(); CHECK(!probe.busy());
+    CHECK(scanner.setCountry("PL"));
     key("`"); store.clear(); auto hidden=beacon({}); proprietary(hidden); store.observe(target(hidden));
     CHECK(scanner.setRunning(false)); key("t");
     CHECK(M5Cardputer.Display.lines[1]=="<hidden>");

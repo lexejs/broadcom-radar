@@ -10,6 +10,10 @@ public:
     bool begin();
     bool setRunning(bool running);
     bool selectChannel(uint8_t channel); // Zero selects hopping.
+    bool setCountry(const char* country);
+    const char* country() const { return country_; }
+    uint8_t firstChannel() const { return firstChannel_; }
+    bool channelAllowed(uint8_t channel) const { return channel >= firstChannel_ && channel <= lastChannel_; }
     void tick();
     bool pop(Frame& frame) { return xQueueReceive(queue_, &frame, 0) == pdTRUE; }
     void clear(); // Call with capture paused.
@@ -35,6 +39,7 @@ private:
     bool ready_ = false, running_ = false, hopping_ = true;
     const char* error_ = "";
     uint32_t errorCount_ = 0;
+    char country_[3] = RADAR_COUNTRY;
 #if RADAR_WPS_PROBE
     bool probeCapture_ = false;
     uint8_t probeBssid_[6]{}, probeStation_[6]{};
