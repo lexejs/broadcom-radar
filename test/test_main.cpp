@@ -689,6 +689,21 @@ struct FakeIndicators : IndicatorHardware {
     bool tone() override { ++tones; return available; }
     void silence() override { ++stops; }
 };
+void sdRemountTests() {
+    mock::files.clear(); mock::sdPresent=true; Exporter exporter; CHECK(exporter.mount());
+    AccessPointStore store; PcapRing ring; ScanStats stats;
+    mock::failWrite=true; CHECK(!exporter.start(store,stats,ring,"ADV"));
+    CHECK(!exporter.available()); mock::failWrite=false;
+    const auto partial=mock::files.at("/broadcom-radar/scan-001.json.part");
+    SD.needsReinit=true; const auto resets=SD.endCalls;
+    CHECK(exporter.mount()); CHECK(SD.endCalls==resets+1 && !SD.needsReinit);
+    CHECK(mock::files.at("/broadcom-radar/scan-001.json.part")==partial);
+    CHECK(exporter.start(store,stats,ring,"ADV")); const auto activeResets=SD.endCalls;
+    CHECK(exporter.mount() && SD.endCalls==activeResets); // Never detach an active export.
+    while(exporter.busy()) exporter.tick(); CHECK(exporter.available());
+    mock::sdPresent=false; CHECK(!exporter.start(store,stats,ring,"ADV")); CHECK(!exporter.mount());
+    mock::sdPresent=true; CHECK(exporter.mount() && !SD.needsReinit);
+}
 void diagnosticLogTests() {
     struct Port {
         bool connected=true; int available=0; size_t limit=32; unsigned writes=0;
@@ -847,7 +862,7 @@ void uiDisplayPowerTests() {
 int main(int argc,char** argv) {
     try {
         parserTests(); storeTests(); scannerTests(); exportTests(argc>1?argv[1]:nullptr);
-        detectionTests(argc>1?argv[1]:nullptr); contextTests(argc>1?argv[1]:nullptr); uiTests(); uiCountryTests(); uiSortingTests(); uiFilterTests(); uiStateTests(); uiDisplayPowerTests(); indicatorTests(); diagnosticLogTests(); uiIndicatorTests(); corruptionTests();
+        detectionTests(argc>1?argv[1]:nullptr); contextTests(argc>1?argv[1]:nullptr); uiTests(); uiCountryTests(); uiSortingTests(); uiFilterTests(); uiStateTests(); uiDisplayPowerTests(); indicatorTests(); diagnosticLogTests(); uiIndicatorTests(); sdRemountTests(); corruptionTests();
         std::cout << "PASS: " << checks << " checks; 50,000 deterministic corrupt frames\n";
     } catch(const std::exception& e) { std::cerr << "FAIL: " << e.what() << '\n'; return 1; }
 }

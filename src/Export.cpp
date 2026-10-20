@@ -27,10 +27,14 @@ bool Exporter::FileSink::flush() {
 }
 bool Exporter::mount() {
     if (busy()) return available_;
+    // SD.begin() reuses its cached mount after an I/O failure. Retry from a clean bus state.
+    SD.end();
+    spi_.end();
     // The expansion connector shares this bus on ADV; keep its CS inactive.
 #if RADAR_ADV
     pinMode(5, OUTPUT); digitalWrite(5, HIGH);
 #endif
+    pinMode(12, OUTPUT); digitalWrite(12, HIGH);
     spi_.begin(40, 39, 14, 12);
     available_ = SD.begin(12, spi_, 10000000) && SD.cardType() != CARD_NONE;
     if (available_ && !SD.exists("/broadcom-radar")) available_ = SD.mkdir("/broadcom-radar");

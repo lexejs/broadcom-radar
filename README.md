@@ -8,7 +8,7 @@ Built for **M5Stack Cardputer ADV** and the **original Cardputer** (ESP32-S3), w
 
 **Published release 1.0.12** · [MIT license](LICENSE) · [All releases](https://github.com/lexejs/broadcom-radar/releases)
 
-Development source: **1.0.23**, not yet published as a release. The downloads below remain the published 1.0.12 images.
+Development source: **1.0.24**, not yet published as a release. The downloads below remain the published 1.0.12 images.
 
 [Download](#download-and-choose-a-firmware) · [Get started](#quick-start) · [Read the results](#meaning-of-results) · [Controls](#controls) · [FAQ](#frequently-asked-questions) · [Research](RESEARCH.md)
 
@@ -218,7 +218,7 @@ Manual PCAP buffering is **off by default**; automatic BRCM archives always incl
 
 The exported PCAP was independently opened with libpcap/tcpdump and the raw record structure was validated. Wireshark GUI opening has not been performed. This is the standard raw-802.11 PCAP format supported by Wireshark.
 
-An absent SD card does not stop scanning. Pressing E or receiving another eligible Broadcom advertisement after the retry delay retries mounting. SD removal, write failure and rename failure are covered by host fault-injection tests. Physical card compatibility/hot insertion and worst-case card blocking latency are not verified.
+An absent SD card does not stop scanning. Pressing E or receiving another eligible Broadcom advertisement after the retry delay retries mounting. Development 1.0.24 detaches the cached SD mount and resets the dedicated SD SPI bus before retrying initialization after an I/O failure. Interrupted files are retained; no formatting is requested. An active manual export is never detached by a mount request. SD removal, write failure, stale cached mounts and rename failure are covered by host fault-injection tests. This does not repair a damaged filesystem or establish a bound on card blocking latency. Physical card compatibility/hot insertion and worst-case card blocking latency are not verified.
 
 </details>
 
