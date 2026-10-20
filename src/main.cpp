@@ -8,6 +8,7 @@
 #include "DisplayUi.h"
 #include "CardputerIndicators.h"
 #include "GroveGps.h"
+#include "DiagnosticLog.h"
 #include "WpsProbeRadio.h"
 #include <freertos/task.h>
 #include <esp_timer.h>
@@ -24,6 +25,7 @@ radar::CardputerIndicators indicatorHardware;
 radar::FieldIndicators indicators(indicatorHardware);
 radar::GroveGps gpsInput;
 radar::GpsTracker gps(gpsInput);
+radar::DiagnosticLog diagnostics;
 radar::Frame frame;
 #if RADAR_WPS_PROBE
 radar::WpsProbe probe;
@@ -38,7 +40,7 @@ constexpr const char* hardware = "M5Stack Cardputer";
 #endif
 }
 void setup() {
-    Serial.begin(115200);
+    Serial.begin(115200); Serial.setTxTimeoutMs(0);
     auto config = M5.config();
     config.external_spk = false; config.internal_spk = false;
     config.internal_mic = false; config.internal_imu = false; config.internal_rtc = false;
@@ -59,7 +61,7 @@ void setup() {
     ui.attachProbe(probe);
 #endif
     exporter.mount(); scannerReady = displayReady && scanner.begin();
-    Serial.printf("Broadcom Radar %s; %s; %s; heap=%u\n", radar::kFirmwareVersion, hardware,
+    diagnostics.format("Broadcom Radar %s; %s; %s; heap=%u\n", radar::kFirmwareVersion, hardware,
                   RADAR_WPS_PROBE ? "experimental manual WPS probe" : "passive-only", ESP.getFreeHeap());
     if (!scannerReady) {
         M5Cardputer.Display.fillScreen(TFT_BLACK);
@@ -118,9 +120,10 @@ void loop() {
     static uint32_t lastHealth = 0;
     if (millis() - lastHealth >= 5000) {
         const auto stats = scanner.stats();
-        Serial.printf("uptime_ms=%u heap=%u min_heap=%u aps=%u rx=%u queue_drops=%u store_drops=%u stack_min_bytes=%u\n",
+        diagnostics.format("uptime_ms=%u heap=%u min_heap=%u aps=%u rx=%u queue_drops=%u store_drops=%u stack_min_bytes=%u\n",
                       unsigned(millis()), ESP.getFreeHeap(), ESP.getMinFreeHeap(), unsigned(store.size()), stats.received, stats.queueDrops, store.dropped(), unsigned(uxTaskGetStackHighWaterMark(nullptr) * sizeof(StackType_t)));
         lastHealth = millis();
     }
+    diagnostics.tick(Serial);
     delay(2);
 }

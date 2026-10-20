@@ -3,6 +3,7 @@
 #include "WifiScanner.h"
 #include "SD.h"
 #include "DisplayUi.h"
+#include "DiagnosticLog.h"
 #include "M5Cardputer.h"
 #include <array>
 #include <cstdlib>
@@ -688,6 +689,35 @@ struct FakeIndicators : IndicatorHardware {
     bool tone() override { ++tones; return available; }
     void silence() override { ++stops; }
 };
+void diagnosticLogTests() {
+    struct Port {
+        bool connected=true; int available=0; size_t limit=32; unsigned writes=0;
+        std::string output;
+        explicit operator bool() const { return connected; }
+        int availableForWrite() { return available; }
+        size_t write(const uint8_t* data,size_t count) {
+            CHECK(count <= size_t(available) && count <= 32); ++writes;
+            const size_t written = count < limit ? count : limit;
+            output.append(reinterpret_cast<const char*>(data),written); available-=written; return written;
+        }
+    } port;
+    DiagnosticLog log;
+    const std::string text(180,'x'); CHECK(log.format("%s",text.c_str()));
+    for(unsigned i=0;i<1000;++i) log.tick(port); // Connected CDC host never drains its FIFO.
+    CHECK(log.pending() && !port.writes && !log.format("discard snapshot"));
+    port.available=5; log.tick(port); CHECK(port.output.size()==5 && log.pending());
+    port.available=64; port.limit=3; log.tick(port); CHECK(port.output.size()==8);
+    port.limit=32;
+    while(log.pending()) { port.available=64; log.tick(port); }
+    CHECK(port.output==text && !log.pending());
+    CHECK(log.format("uptime_ms=%u\n",123u));
+    port.connected=false; log.tick(port); CHECK(!log.pending());
+    port.connected=true; port.output.clear(); CHECK(log.format("restart\n"));
+    port.available=-1; const auto writes=port.writes; log.tick(port); CHECK(port.writes==writes);
+    port.available=32; port.limit=0; log.tick(port); CHECK(log.pending() && port.output.empty());
+    port.limit=32; log.tick(port); CHECK(!log.pending() && port.output=="restart\n");
+    const std::string oversized(256,'x'); CHECK(!log.format("%s",oversized.c_str()) && !log.pending());
+}
 void indicatorTests() {
     FakeIndicators hardware; FieldIndicators indicators(hardware);
     ScanStats stats; stats.running=true; stats.nowUs=2000000;
@@ -817,7 +847,7 @@ void uiDisplayPowerTests() {
 int main(int argc,char** argv) {
     try {
         parserTests(); storeTests(); scannerTests(); exportTests(argc>1?argv[1]:nullptr);
-        detectionTests(argc>1?argv[1]:nullptr); contextTests(argc>1?argv[1]:nullptr); uiTests(); uiCountryTests(); uiSortingTests(); uiFilterTests(); uiStateTests(); uiDisplayPowerTests(); indicatorTests(); uiIndicatorTests(); corruptionTests();
+        detectionTests(argc>1?argv[1]:nullptr); contextTests(argc>1?argv[1]:nullptr); uiTests(); uiCountryTests(); uiSortingTests(); uiFilterTests(); uiStateTests(); uiDisplayPowerTests(); indicatorTests(); diagnosticLogTests(); uiIndicatorTests(); corruptionTests();
         std::cout << "PASS: " << checks << " checks; 50,000 deterministic corrupt frames\n";
     } catch(const std::exception& e) { std::cerr << "FAIL: " << e.what() << '\n'; return 1; }
 }
