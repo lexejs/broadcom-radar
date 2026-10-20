@@ -219,6 +219,31 @@ void transportTests() {
     CHECK(radio.tick(probe,scanner,exporter,frame,"Cardputer ADV")); CHECK(!probe.result().restored);
     mock::result=ESP_OK;
 }
+void stationIdentityTests() {
+    for (unsigned failure=0;failure<3;++failure) {
+        WifiScanner scanner; CHECK(scanner.begin()); CHECK(scanner.selectChannel(11)); CHECK(scanner.setRunning(false));
+        WpsProbe probe; CHECK(probe.setRandomStation(true)); WpsProbeRadio radio; Exporter exporter;
+        const auto bytes=advertisement(); const auto before=mock::transmitted.size();
+        CHECK(probe.request(target(bytes)) && !probe.setRandomStation(false));
+        if (failure==1) mock::failMacOnce=true;
+        radio.tick(probe,scanner,exporter,frame,"Cardputer ADV");
+        if (failure!=1) {
+            CHECK(probe.result().stationRandomized && (probe.station()[0]&3)==2);
+            CHECK(std::memcmp(probe.station(),station,6)!=0 && !std::memcmp(probe.station(),mock::stationMac,6));
+            if (failure==2) mock::failMacOnce=true;
+            probe.cancel(mock::nowUs); CHECK(radio.tick(probe,scanner,exporter,frame,"Cardputer ADV"));
+        }
+        CHECK(probe.done() && probe.result().stationRotationRequested && !scanner.stats().running);
+        CHECK(mock::transmitted.size()==before);
+        if (failure==2) {
+            CHECK(!probe.result().restored && probe.result().stationRestoreError==ESP_FAIL);
+            std::memcpy(mock::stationMac,station,6); // Restore the test fixture after the simulated device failure.
+        } else {
+            CHECK(probe.result().restored && !probe.result().stationRestoreError && !std::memcmp(mock::stationMac,station,6));
+            CHECK(scanner.stats().channel==11 && !scanner.stats().hopping);
+        }
+    }
+}
 void uiTests() {
     WifiScanner scanner; CHECK(scanner.begin()); AccessPointStore store; store.observe(target(advertisement()));
     WpsProbe probe; Exporter exporter; PcapRing ring; DisplayUi ui; CHECK(ui.begin()); ui.attachProbe(probe);
@@ -233,6 +258,7 @@ void uiTests() {
     M5Cardputer.Keyboard.event(""); M5Cardputer.Keyboard.state.enter=true; tick(); CHECK(probe.requested());
     key("s"); key("f"); CHECK(scanner.stats().running); key("`"); CHECK(probe.done() && probe.result().reason==ProbeReason::Cancelled);
     key("`"); CHECK(M5Cardputer.Display.lines[8].find("F:WPS")!=std::string::npos);
+    key("a"); CHECK(probe.randomStation()); key("a"); CHECK(!probe.randomStation());
     CHECK(M5Cardputer.Display.boundsOk && M5Cardputer.Display.directClears==0);
 }
 void blockedStartUiTests() {
@@ -365,7 +391,7 @@ void uiDisplayWakeTests() {
 }
 int main(int argc, char** argv) {
     try {
-        protocolTests(argc>1?argv[1]:nullptr); transportTests(); uiTests(); blockedStartUiTests(); uiResultTests(); uiDisplayWakeTests();
+        protocolTests(argc>1?argv[1]:nullptr); transportTests(); stationIdentityTests(); uiTests(); blockedStartUiTests(); uiResultTests(); uiDisplayWakeTests();
         std::cout<<"PASS: "<<checks<<" experimental WPS checks; simulated responses only, not RF calibration\n";
     } catch(const std::exception& e) { std::cerr<<"FAIL: "<<e.what()<<'\n'; return 1; }
 }

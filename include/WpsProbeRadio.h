@@ -10,6 +10,8 @@ public:
 private:
     ScanStats previous_;
     bool prepared_ = false;
+    bool macTouched_ = false;
+    uint8_t originalMac_[6]{};
 };
 }
 #endif

@@ -8,7 +8,7 @@ Built for **M5Stack Cardputer ADV** and the **original Cardputer** (ESP32-S3), w
 
 **Published release 1.0.12** · [MIT license](LICENSE) · [All releases](https://github.com/lexejs/broadcom-radar/releases)
 
-Development source: **1.0.17**, not yet published as a release. The downloads below remain the published 1.0.12 images.
+Development source: **1.0.18**, not yet published as a release. The downloads below remain the published 1.0.12 images.
 
 [Download](#download-and-choose-a-firmware) · [Get started](#quick-start) · [Read the results](#meaning-of-results) · [Controls](#controls) · [FAQ](#frequently-asked-questions) · [Research](RESEARCH.md)
 
@@ -267,6 +267,8 @@ Local builds generate the same filenames under `dist/`; generated files are excl
 
 Filenames include the firmware version from `include/RadarTypes.h`. The adjacent `.bin.json` files contain exact sizes, SHA-256 hashes and required app partition sizes rounded to 64 KiB. These are **application-only** ESP32-S3 images, starting with `0xE9`. They contain no bootloader, partition table, filesystem image or configuration. Use the binary for your hardware: the ADV build explicitly selects the TCA8418 keyboard reader; the original selects the GPIO matrix reader.
 
+
+Development 1.0.18 adds **A** on the list/details to toggle a random locally administered unicast station MAC for each manually confirmed test. It is off initially, unavailable during a test or confirmation, and resets on restart. The confirmation shows the chosen address policy. The driver interface is stopped before changing its MAC; setup restores the selected country and power configuration, and the original MAC is restored before scanner reception resumes. A rotation/setup failure starts no exchange. Failed identity restoration leaves capture paused and is recorded separately as `station_restore_error`; reports retain the actual session station and `station_rotation_requested` / `station_randomized`. This feature does not change the default passive build.
 
 All experimental modes require selecting your own named WPS AP, pressing **T**, reviewing the pinned BSSID/channel and pressing **Enter**. **Esc** cancels. Other scan-changing keys are disabled during a test. Automatic BRCM detection never starts an exchange. Hidden SSIDs and unsupported channels cannot start a test. Since 1.0.8, unavailable targets stay on the confirmation screen with their actual blocking reason, such as `Hidden SSID` or `WPS not observed`, instead of returning to the list. The pinned BSSID is refreshed from incoming observations while confirmation is open; later complete name/WPS data can make it eligible. A plus sign is valid SSID data and does not block testing. Since 1.0.9, the list distinguishes `BRCM+WPS` from `BRCM` without observed WPS support. The combined badge is a passive triage cue, not a guarantee that a test can start or that a vulnerable WPS implementation is present. Hidden SSIDs and the other start requirements still apply.
 

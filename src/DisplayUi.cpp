@@ -258,7 +258,11 @@ void DisplayUi::help(const ScanStats& s, const PcapRing& ring) {
         line(3, "Passive capture build"); line(4, "D: scan diagnostics");
         line(5, "No active tests available"); line(6, "No vulnerability verdict");
 #endif
+#if RADAR_WPS_PROBE
+        line(7, "A:MAC %s Scan:%s", probe_ && probe_->randomStation() ? "random" : "device", s.running ? "RUN" : "PAUSE");
+#else
         line(7, "Capture is %s", s.running ? "running" : "paused");
+#endif
     } else {
         line(1, "B: screen settings"); line(2, "L: turn display off");
         line(3, "Any key: wake only"); line(4, "Up/Down: choose setting");
@@ -293,7 +297,7 @@ void DisplayUi::draw(const AccessPointStore& store, const ScanStats& s, const Ex
                 line(3, "Active test of ONE AP"); line(4, "Use on your own AP only");
                 line(5, RADAR_DRIVER_COMPAT ? (RADAR_TRANSPORT_ONLY ? "Stop at WSC Start" : "One empty WPS fragment") : "Stock driver may reject TX");
                 line(6, "Enter confirms this AP"); line(7, RADAR_TRANSPORT_ONLY ? "Transport experiment" : "Uncalibrated fingerprint");
-                line(8, "No packets sent yet");
+                line(8, probe_->randomStation() ? "MAC: random; not sent" : "MAC: device; not sent");
             }
         } else {
             const auto& r = probe_->result();
@@ -568,6 +572,7 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
                 if (c == 't' && probe_ && selected_ < orderedCount_) {
                     probeTarget_ = store.at(ordered_[selected_]).info; modalReturn_ = screen_; screen_ = Screen::ProbeConfirm; break;
                 }
+                if (c == 'a' && probe_ && probe_->setRandomStation(!probe_->randomStation())) notify(probe_->randomStation() ? "Test MAC: random per test" : "Test MAC: device address");
 #endif
                 if (c == 'f') {
                     filter_ = filter_ == Filter::All ? Filter::Wps : filter_ == Filter::Wps ? Filter::BroadcomWps : Filter::All;

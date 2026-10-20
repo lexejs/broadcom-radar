@@ -156,6 +156,8 @@ bool writeProbeJson(Sink& sink, const WpsProbe& probe, const char* hardware) {
     w.raw(",\"driver_transport\":"); w.str(RADAR_DRIVER_COMPAT ? "scoped-idf447-compatibility" : "stock-public-api");
     w.raw(",\"bssid\":"); w.str(bssid);
     w.raw(",\"station\":"); w.str(station); w.raw(","); w.field("ssid", probe.target().ssid);
+    w.fmt(",\"station_rotation_requested\":%s,\"station_randomized\":%s,\"station_restore_error\":%d",
+          r.stationRotationRequested ? "true" : "false", r.stationRandomized ? "true" : "false", r.stationRestoreError);
     w.fmt(",\"channel\":%u,\"started_us\":%llu,\"finished_us\":%llu,\"clock\":\"monotonic_since_boot\",",
           probe.target().channel, (unsigned long long)r.startedUs, (unsigned long long)r.finishedUs);
     w.raw("\"implementation_candidate\":"); w.str(probeVerdictName(r.verdict)); w.raw(",\"reason\":"); w.str(probeReasonName(r.reason));

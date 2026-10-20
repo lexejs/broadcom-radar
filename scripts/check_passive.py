@@ -17,7 +17,7 @@ for path in sorted(list((ROOT / "src").glob("*.cpp")) + list((ROOT / "include").
         if not content.startswith('#include "WpsProbeRadio.h"\n#if RADAR_WPS_PROBE\n') or not content.endswith("#endif\n"):
             raise SystemExit("Experimental transport must remain entirely build-gated")
         apis = set(re.findall(r"\b(esp_wifi_\w+)\s*\(", content))
-        if apis != {"esp_wifi_get_mac", "esp_wifi_80211_tx"}:
+        if apis != {"esp_wifi_get_mac", "esp_wifi_set_mac", "esp_wifi_stop", "esp_wifi_start", "esp_wifi_set_ps", "esp_wifi_set_country_code", "esp_wifi_80211_tx"}:
             raise SystemExit(f"Experimental transport API changes require review: {apis}")
         continue
     if path.name == "DriverCompat.cpp":

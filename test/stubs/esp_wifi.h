@@ -9,6 +9,7 @@ extern "C" int ieee80211_raw_frame_sanity_check(int, const void*, int, bool);
 using esp_err_t = int;
 constexpr int ESP_OK = 0, ESP_ERR_INVALID_STATE = 0x103, ESP_FAIL = -1;
 constexpr int ESP_ERR_INVALID_ARG = 0x102;
+constexpr int ESP_ERR_WIFI_NOT_STARTED = 0x3002;
 enum wifi_promiscuous_pkt_type_t { WIFI_PKT_MGMT, WIFI_PKT_DATA, WIFI_PKT_CTRL };
 using wifi_promiscuous_cb_t = void (*)(void*, wifi_promiscuous_pkt_type_t);
 constexpr int WIFI_STORAGE_RAM = 0, WIFI_MODE_STA = 1, WIFI_IF_STA = 0, WIFI_PS_NONE = 0, WIFI_SECOND_CHAN_NONE = 0;
@@ -31,6 +32,8 @@ inline uint8_t channel = 0;
 inline wifi_country_t country = {{'P','L',0},1,13,WIFI_COUNTRY_POLICY_MANUAL};
 inline int result = ESP_OK;
 inline bool failCountryOnce = false;
+inline bool failMacOnce = false, radioStarted = false;
+inline uint8_t stationMac[6] = {2,0,0,0,0,0xee};
 inline int txResult = ESP_ERR_INVALID_ARG;
 inline std::vector<std::vector<uint8_t>> transmitted;
 inline int call(const char* name) { calls.emplace_back(name); return result; }
@@ -51,7 +54,7 @@ inline int esp_wifi_set_country_code(const char* code, bool enabled) {
     return result;
 }
 inline int esp_wifi_get_country(wifi_country_t* c) { *c = mock::country; return mock::call("get_country"); }
-inline int esp_wifi_start() { return mock::call("start_idle"); }
+inline int esp_wifi_start() { const int result=mock::call("start_idle"); if (!result) mock::radioStarted=true; return result; }
 inline int esp_wifi_set_ps(int) { return mock::call("ps_none"); }
 inline int esp_wifi_set_promiscuous_filter(const wifi_promiscuous_filter_t* f) {
     if (f->filter_mask == WIFI_PROMIS_FILTER_MASK_MGMT) return mock::call("filter_mgmt_only");
@@ -65,8 +68,19 @@ inline int esp_wifi_set_promiscuous(bool enabled) { const int result=mock::call(
 inline int esp_wifi_set_channel(uint8_t channel, int) { const int result=mock::call("set_channel"); if (!result) mock::channel=channel; return result; }
 #if RADAR_WPS_PROBE
 inline int esp_wifi_get_mac(int, uint8_t* mac) {
-    const uint8_t station[] = {2,0,0,0,0,0xee};
-    for (unsigned i=0;i<6;++i) mac[i]=station[i]; return mock::call("get_mac");
+    std::memcpy(mac,mock::stationMac,6); return mock::call("get_mac");
+}
+inline int esp_wifi_stop() {
+    const int result=mock::call("stop_radio");
+    if (result) return result;
+    if (!mock::radioStarted) return ESP_ERR_WIFI_NOT_STARTED;
+    mock::radioStarted=false; return ESP_OK;
+}
+inline int esp_wifi_set_mac(int, const uint8_t* mac) {
+    const int result=mock::call("set_mac"); if (result) return result;
+    if (mock::radioStarted || (mac[0]&1)) return ESP_ERR_INVALID_ARG;
+    if (mock::failMacOnce) { mock::failMacOnce=false; return ESP_FAIL; }
+    std::memcpy(mock::stationMac,mac,6); return ESP_OK;
 }
 inline int esp_wifi_80211_tx(int interface, const void* data, int length, bool sequence) {
     (void)interface;

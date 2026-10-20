@@ -37,6 +37,8 @@ struct ProbeResult {
     uint32_t scanRxFrames = 0, queueDrops = 0, oversizeDrops = 0;
     bool transportOnly = RADAR_TRANSPORT_ONLY, wscStartReceived = false, differentialSent = false, scanWasRunning = false;
     bool cleanupAccepted = false, restored = false, reported = false;
+    bool stationRotationRequested = false, stationRandomized = false;
+    int stationRestoreError = 0;
 };
 bool isProbeReply(const uint8_t* bytes, size_t length, const uint8_t* bssid, const uint8_t* station);
 const char* probeStageName(ProbeStage stage);
@@ -70,6 +72,10 @@ public:
     const Observation& target() const { return target_; }
     uint32_t attemptId() const { return attemptId_; }
     const uint8_t* station() const { return station_; }
+    bool randomStation() const { return randomStation_; }
+    bool setRandomStation(bool enabled) { if (busy()) return false; randomStation_ = enabled; return true; }
+    void stationChanged(bool changed) { result_.stationRandomized = changed; }
+    void stationRestoration(int error) { result_.stationRestoreError = error; }
     size_t recordCount() const { return recordCount_; }
     const ProbeRecord& record(size_t i) const { return records_[i]; }
 private:
@@ -93,5 +99,6 @@ private:
     uint16_t sequence_ = 0;
     uint8_t identifier_ = 0, identityReplies_ = 0;
     bool sessionStarted_ = false, wpsEntered_ = false, differentialSent_ = false, observedNoWps_ = false;
+    bool randomStation_ = false;
 };
 }
