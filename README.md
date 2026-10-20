@@ -8,7 +8,7 @@ Built for **M5Stack Cardputer ADV** and the **original Cardputer** (ESP32-S3), w
 
 **Published release 1.0.12** · [MIT license](LICENSE) · [All releases](https://github.com/lexejs/broadcom-radar/releases)
 
-Development source: **1.0.19**, not yet published as a release. The downloads below remain the published 1.0.12 images.
+Development source: **1.0.20**, not yet published as a release. The downloads below remain the published 1.0.12 images.
 
 [Download](#download-and-choose-a-firmware) · [Get started](#quick-start) · [Read the results](#meaning-of-results) · [Controls](#controls) · [FAQ](#frequently-asked-questions) · [Research](RESEARCH.md)
 
@@ -148,6 +148,7 @@ The first key after screen-off only wakes the display. Scanning, channel hopping
 | E | Export JSON/CSV and optional PCAP; automatically pause capture and restore its prior state |
 | M | Choose `HOP` or hold one channel |
 | O | Toggle discovery order / strongest current RSSI within each detection group (development 1.0.15+) |
+| N | Optional RGB alerts and selected-AP sound settings (development 1.0.20+) |
 | C | Choose a supported country; Enter applies, Backspace cancels (development 1.0.14+) |
 | P | Toggle bounded PCAP capture, clearing the previous PCAP buffer |
 | H | Open or close five-page help, preserving the previous screen and page |
@@ -168,6 +169,9 @@ Only the main screen has a bottom keyboard-hint row. The seven named detail page
 Since 1.0.10, **F** cycles `ALL` -> `WPS` -> `B+W` -> `ALL`, initially showing all networks. Candidate filters use the same target eligibility check as the manual test: complete data, a known non-hidden SSID, channel 1-13, a valid unicast BSSID and observed WPS. `B+W` additionally requires a Broadcom signature. The main header and footer show the active filter; `AP:2/7` means two visible out of seven stored APs. Incoming observations update membership automatically. An eligible selection is preserved; when it is excluded, selection moves to the first visible AP. An empty result says `No matching networks`, and Enter/T cannot open a hidden row. Filters affect only the displayed list, preserve all collected records and exports, and do not increase the 128-BSSID capacity. Filter changes are disabled during export and test confirmation/execution. Hidden records are not assessed as safe.
 
 Since 1.0.12, **B** opens screen settings from any screen. Brightness steps are 30/50/70/100/150/200/255, initially 100. Auto off is disabled initially; optional timeouts are 30/60/120/300 seconds without keyboard activity. The timer waits during test confirmation, a running test, manual export and screen settings. **L** immediately blanks the display on any screen, including during a test or export. Blanking sets backlight brightness to zero and stops drawing; the LCD controller, CPU, receiver, channel hopping and automatic archives continue. The first key only restores the selected brightness and redraws the current screen; commands are suppressed until all wake keys are released. This prevents wake Enter from starting a test or wake R from clearing data. Held keys prevent automatic blanking. Notifications do not reset inactivity. Screen settings reset on restart. Display blanking does not change the existing radio configuration or establish a measured battery-life improvement.
+
+Development 1.0.20 adds **N** for optional RGB and sound indicators. Both start OFF and reset on restart. Green is a brief receiver-activity pulse, at most once per two seconds; orange marks new Broadcom evidence, at most five pulses per second. A bounded 32-BSSID alert history is separate from stored findings. On the original Cardputer RGB can work while the display is blank. On ADV the LED shares backlight power: RGB operates only with the display on at brightness 255, without changing backlight power to signal. Sound tracks the selected visible AP with short low-volume clicks, from about one every two seconds to five per second as current RSSI increases. Paused reception, no selection, an active test or a last observation older than 15 seconds stops audio and releases its driver. RSSI is not a distance or direction measurement. A failed audio start switches sound OFF. Enabling indicators uses additional power; hardware behavior and battery impact require device testing.
+
 
 Only changed rows are transferred to the display, at most twice per second for scan updates and immediately for key presses. Each row is composed in a reusable 240x15 RGB565 canvas (7,200 bytes), then sent without clearing the physical display. DMA completes before the buffer is reused. The existing font is scaled, so no additional font assets are linked. Builds use size optimization, LTO and disabled C++ exceptions. The M5GFX build hook keeps its include-dependent base class consistent across translation units for LTO.
 

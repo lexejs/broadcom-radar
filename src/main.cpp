@@ -6,6 +6,7 @@
 #include <utility/Keyboard/KeyboardReader/IOMatrix.h>
 #endif
 #include "DisplayUi.h"
+#include "CardputerIndicators.h"
 #include "WpsProbeRadio.h"
 #include <freertos/task.h>
 
@@ -17,6 +18,8 @@ radar::AdvertisementCache context;
 radar::AdvertisementParser parser;
 radar::Exporter exporter;
 radar::DisplayUi ui;
+radar::CardputerIndicators indicatorHardware;
+radar::FieldIndicators indicators(indicatorHardware);
 radar::Frame frame;
 #if RADAR_WPS_PROBE
 radar::WpsProbe probe;
@@ -47,6 +50,7 @@ void setup() {
     M5Cardputer.Keyboard.begin(std::make_unique<IOMatrixKeyboardReader>());
 #endif
     const bool displayReady = ui.begin();
+    ui.attachIndicators(indicators);
 #if RADAR_WPS_PROBE
     ui.attachProbe(probe);
 #endif
@@ -83,6 +87,7 @@ void loop() {
             if (observation.malformed) ++malformed;
             const auto* ap = store.observe(observation);
             auto stats = scanner.stats();
+            if (!observation.malformed) indicators.observe(ap ? ap->info : observation, stats.startedUs);
             context.remember(frame, observation, stats.startedUs);
             if (exporter.needsDetection(observation, ap, stats.nowUs)) {
                 const bool running = stats.running;
@@ -99,6 +104,11 @@ void loop() {
     if (probeRadio.tick(probe, scanner, exporter, frame, hardware)) ui.notify(exporter.message());
 #endif
     ui.tick(store, scanner, exporter, pcap, rejected, malformed, hardware);
+    const radar::AccessPoint* selected = ui.selection(store);
+#if RADAR_WPS_PROBE
+    if (probe.busy()) selected = nullptr;
+#endif
+    indicators.tick(scanner.stats(), selected, ui.rgbPowerAvailable(), millis());
     static uint32_t lastHealth = 0;
     if (millis() - lastHealth >= 5000) {
         const auto stats = scanner.stats();

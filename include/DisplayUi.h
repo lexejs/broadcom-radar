@@ -1,11 +1,15 @@
 #pragma once
 #include "Export.h"
+#include "FieldIndicators.h"
 #include "WifiScanner.h"
 #include <M5Cardputer.h>
 namespace radar {
 class DisplayUi {
 public:
     bool begin();
+    void attachIndicators(FieldIndicators& indicators) { indicators_ = &indicators; }
+    const AccessPoint* selection(const AccessPointStore& store) const;
+    bool rgbPowerAvailable() const;
     void notify(const char* message);
 #if RADAR_WPS_PROBE
     void attachProbe(WpsProbe& probe) { probe_ = &probe; }
@@ -13,7 +17,7 @@ public:
     void tick(AccessPointStore& store, WifiScanner& scanner, Exporter& exporter,
               PcapRing& ring, uint32_t& rejected, uint32_t& malformed, const char* hardware);
 private:
-    enum class Screen { List, Detail, Channel, Country, Help, Text, Diagnostics, Display, ProbeConfirm, Probe };
+    enum class Screen { List, Detail, Channel, Country, Help, Text, Diagnostics, Display, Indicators, ProbeConfirm, Probe };
     enum class Filter { All, Wps, BroadcomWps };
     struct Row {
         char text[27]{};
@@ -37,6 +41,9 @@ private:
     void wakeScreen();
     Screen screen_ = Screen::List;
     Screen helpReturn_ = Screen::List, modalReturn_ = Screen::List, diagnosticsReturn_ = Screen::List;
+    FieldIndicators* indicators_ = nullptr;
+    unsigned indicatorField_ = 0;
+    Screen indicatorsReturn_ = Screen::List;
     Screen displayReturn_ = Screen::List;
     Filter filter_ = Filter::All;
     bool signalSort_ = false;

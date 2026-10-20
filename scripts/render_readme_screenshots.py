@@ -41,7 +41,7 @@ def main():
     font = bytes(int(value, 16) for value in re.findall(r'0x([0-9a-fA-F]{2})', glyphs))
     assert len(font) >= 128 * 5
     sources = ('IeParser', 'WpsParser', 'BroadcomDetector', 'AccessPointStore',
-               'Serialization', 'WifiScanner', 'Export', 'DisplayUi', 'WpsProbe')
+               'Serialization', 'WifiScanner', 'Export', 'DisplayUi', 'FieldIndicators', 'WpsProbe')
     with tempfile.TemporaryDirectory(prefix='broadcom-ui-previews-') as temporary:
         executable = Path(temporary) / 'capture-ui'
         subprocess.run([os.environ.get('CXX', 'clang++'), '-std=c++17', '-O1', '-Wall', '-Wextra', '-Werror',

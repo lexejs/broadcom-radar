@@ -72,6 +72,16 @@ const char* reasonLabel(ProbeReason reason, ProbeResponse response) {
 }
 #endif
 }
+const AccessPoint* DisplayUi::selection(const AccessPointStore& store) const {
+    return selected_ < orderedCount_ && ordered_[selected_] < store.size() ? &store.at(ordered_[selected_]) : nullptr;
+}
+bool DisplayUi::rgbPowerAvailable() const {
+#if RADAR_ADV
+    return displayOn_ && kBrightness[brightnessChoice_] == 255;
+#else
+    return true;
+#endif
+}
 bool DisplayUi::begin() {
     M5Cardputer.Display.setRotation(1);
     M5Cardputer.Display.setBrightness(kBrightness[brightnessChoice_]);
@@ -230,13 +240,19 @@ void DisplayUi::textPage() {
     else line(8, "%u bytes; %s", unsigned(textBytes_), textLimited_ ? "source limited" : "complete value");
 }
 void DisplayUi::help(const ScanStats& s, const PcapRing& ring) {
-    line(0, "HELP %u/%u", helpPage_ + 1, kHelpPages);
+    if (helpReturn_ == Screen::Indicators) line(0, "INDICATOR HELP");
+    else line(0, "HELP %u/%u", helpPage_ + 1, kHelpPages);
     foreground_ = TFT_WHITE; background_ = TFT_BLACK;
-    if (helpPage_ == 0) {
+    if (helpReturn_ == Screen::Indicators) {
+        line(1, "Up/Down: choose indicator"); line(2, "Enter/Left/Right: toggle");
+        line(3, "Green: receiver activity"); line(4, "Orange: new signature");
+        line(5, "Sound: selected AP RSSI"); line(6, "Stale/paused: no clicks");
+        line(7, "Esc: back; defaults OFF");
+    } else if (helpPage_ == 0) {
         line(1, "; up . down , left / right"); line(2, "Enter: open / next / apply");
         line(3, "Esc / Backspace / `: back"); line(4, "H: help; Left/Right: page");
         line(5, "F: filter S: pause/resume"); line(6, "M:CH C:country P:PCAP");
-        line(7, "O:sort R twice:clear");
+        line(7, "O:sort N:alerts");
     } else if (helpPage_ == 1) {
         line(1, "ALL: all stored networks"); line(2, "WPS: test-ready APs");
         line(3, "B+W: BRCM + test-ready"); line(4, "B/P: Beacon/Probe Response");
@@ -250,7 +266,7 @@ void DisplayUi::help(const ScanStats& s, const PcapRing& ring) {
 #else
         line(5, "PCAP stores received ads");
 #endif
-        line(6, "R keeps files on SD");
+        line(6, "R twice:clear; SD kept");
         line(7, "PCAP: %s; last %u frames", ring.enabled() ? "ON" : "OFF", unsigned(kPcapDepth));
     } else if (helpPage_ == 3) {
         line(1, "Details: Up/Down field"); line(2, "V: read full selected text");
@@ -333,6 +349,22 @@ void DisplayUi::draw(const AccessPointStore& store, const ScanStats& s, const Ex
     if (screen_ == Screen::Detail && selected_ < orderedCount_) detail(store.at(ordered_[selected_]), s);
     else if (screen_ == Screen::Text) textPage();
     else if (screen_ == Screen::Help) help(s, ring);
+    else if (screen_ == Screen::Indicators && indicators_) {
+        line(0, "FIELD INDICATORS"); foreground_ = TFT_WHITE; background_ = TFT_BLACK;
+        background_ = indicatorField_ == 0 ? TFT_NAVY : TFT_BLACK;
+        line(1, "RGB: %s", indicators_->ledEnabled() ? "ON" : "OFF");
+        background_ = indicatorField_ == 1 ? TFT_NAVY : TFT_BLACK;
+        line(2, "Selected AP sound: %s", indicators_->soundEnabled() ? "ON" : "OFF"); background_ = TFT_BLACK;
+        line(4, "Settings reset on restart");
+#if RADAR_ADV
+        line(5, "ADV RGB needs light 255");
+#else
+        line(5, "RGB works with screen off");
+#endif
+        line(6, "Sound waits for fresh AP");
+        line(7, "Faster clicks: stronger RX");
+        if (indicators_->soundError()) line(8, "Sound unavailable; OFF");
+    }
     else if (screen_ == Screen::Display) {
         line(0, "SCREEN SETTINGS"); foreground_ = TFT_WHITE; background_ = TFT_BLACK;
         line(1, "Settings reset on restart");
@@ -510,6 +542,16 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
             }
         }
 #endif
+        else if (screen_ == Screen::Indicators && indicators_) {
+            if (esc) screen_ = indicatorsReturn_;
+            else {
+                if (up || down) indicatorField_ = 1 - indicatorField_;
+                if (left || right || keys.enter) {
+                    if (indicatorField_ == 0) indicators_->enableLed(!indicators_->ledEnabled());
+                    else indicators_->enableSound(!indicators_->soundEnabled());
+                }
+            }
+        }
         else if (screen_ == Screen::Display) {
             if (esc) screen_ = displayReturn_;
             else {
@@ -581,6 +623,7 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
                     filter_ = filter_ == Filter::All ? Filter::Wps : filter_ == Filter::Wps ? Filter::BroadcomWps : Filter::All;
                     updateOrder(store); screen_ = Screen::List;
                 }
+                if (c == 'n' && indicators_) { indicatorsReturn_ = screen_; screen_ = Screen::Indicators; break; }
                 if (c == 'o') { signalSort_ = !signalSort_; updateOrder(store); screen_ = Screen::List; notify(signalSort_ ? "Sort: signal within groups" : "Sort: discovery order"); }
                 if (c == 's') setRunning(scanner, !scanner.stats().running);
                 if (c == 'r') {
@@ -621,7 +664,7 @@ void DisplayUi::tick(AccessPointStore& store, WifiScanner& scanner, Exporter& ex
     if (probe_ && (screen_ == Screen::ProbeConfirm || probe_->busy())) target = probeTarget_.bssid;
 #endif
     store.protect(selected, target);
-    bool keepVisible = exporting || exporter.busy() || screen_ == Screen::Display || screen_ == Screen::Country;
+    bool keepVisible = exporting || exporter.busy() || screen_ == Screen::Display || screen_ == Screen::Country || screen_ == Screen::Indicators;
 #if RADAR_WPS_PROBE
     keepVisible |= probe_ && (content == Screen::ProbeConfirm || probe_->busy());
 #endif

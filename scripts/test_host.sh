@@ -7,7 +7,7 @@ compiler="${CXX:-clang++}"
   -fsanitize=address,undefined -fno-omit-frame-pointer \
   '-DRADAR_COUNTRY="PL"' -DRADAR_ADV=1 -Iinclude -Itest/stubs \
   test/test_main.cpp src/IeParser.cpp src/WpsParser.cpp src/BroadcomDetector.cpp \
-  src/AccessPointStore.cpp src/Serialization.cpp src/WifiScanner.cpp src/Export.cpp src/DisplayUi.cpp src/WpsProbe.cpp \
+  src/AccessPointStore.cpp src/Serialization.cpp src/WifiScanner.cpp src/Export.cpp src/DisplayUi.cpp src/FieldIndicators.cpp src/WpsProbe.cpp \
   -o .test-build/test-radar
 if [[ "$(uname -s)" == Darwin ]]; then
   ASAN_OPTIONS=detect_leaks=0 .test-build/test-radar .test-build
@@ -18,7 +18,7 @@ fi
   -fsanitize=address,undefined -fno-omit-frame-pointer \
   '-DRADAR_COUNTRY="PL"' -DRADAR_ADV=1 -DRADAR_WPS_PROBE=1 -Iinclude -Itest/stubs \
   test/test_probe.cpp src/IeParser.cpp src/WpsParser.cpp src/BroadcomDetector.cpp \
-  src/AccessPointStore.cpp src/Serialization.cpp src/WifiScanner.cpp src/Export.cpp src/DisplayUi.cpp \
+  src/AccessPointStore.cpp src/Serialization.cpp src/WifiScanner.cpp src/Export.cpp src/DisplayUi.cpp src/FieldIndicators.cpp \
   src/WpsProbe.cpp src/WpsProbeRadio.cpp -o .test-build/test-probe
 if [[ "$(uname -s)" == Darwin ]]; then
   ASAN_OPTIONS=detect_leaks=0 .test-build/test-probe .test-build

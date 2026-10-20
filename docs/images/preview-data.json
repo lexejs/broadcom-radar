@@ -1,11 +1,11 @@
 {
-  "firmware": "1.0.19",
+  "firmware": "1.0.20",
   "screens": [
     {
       "file": "network-list.png",
       "rows": [
         {
-          "text": "BRCM-RDR 1.0.19 P ALL",
+          "text": "BRCM-RDR 1.0.20 P ALL",
           "foreground": 1,
           "background": 3
         },

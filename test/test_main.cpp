@@ -680,6 +680,67 @@ void uiStateTests() {
     CHECK(M5Cardputer.Display.lines[8]=="AP replacements: 2");
     CHECK(M5Cardputer.Display.lines[3].find("RX queue drops:")==0); secondary();
 }
+struct FakeIndicators : IndicatorHardware {
+    unsigned pulses = 0, tones = 0, stops = 0;
+    uint8_t red = 0, green = 0;
+    bool available = true;
+    void rgb(uint8_t r, uint8_t g, uint8_t) override { red=r; green=g; ++pulses; }
+    bool tone() override { ++tones; return available; }
+    void silence() override { ++stops; }
+};
+void indicatorTests() {
+    FakeIndicators hardware; FieldIndicators indicators(hardware);
+    ScanStats stats; stats.running=true; stats.nowUs=2000000;
+    AccessPoint ap=aggregate(fixedUuid()); ap.lastSeenUs=stats.nowUs; ap.info.rssi=-95;
+    indicators.observe(ap.info, 1); indicators.tick(stats,&ap,true,0);
+    CHECK(hardware.pulses==0 && hardware.tones==0);
+    indicators.enableLed(true); ++stats.received; indicators.tick(stats,&ap,true,0);
+    CHECK(hardware.green==12 && hardware.red==0);
+    indicators.tick(stats,&ap,true,20); CHECK(hardware.green==0);
+    indicators.observe(ap.info,1); indicators.tick(stats,&ap,true,200);
+    CHECK(hardware.red==28 && hardware.green==8);
+    indicators.tick(stats,&ap,true,280); const auto pulses=hardware.pulses;
+    indicators.observe(ap.info,1); indicators.tick(stats,&ap,true,500);
+    CHECK(hardware.pulses==pulses); // Same evidence is not another alert.
+    indicators.observe(ap.info,2); indicators.tick(stats,&ap,false,800);
+    indicators.tick(stats,&ap,true,900); CHECK(hardware.pulses==pulses); // No delayed wake pulse.
+    ++stats.received; indicators.tick(stats,&ap,true,2200); CHECK(hardware.green==12);
+    indicators.enableLed(false); CHECK(hardware.green==0);
+    indicators.enableSound(true); indicators.tick(stats,&ap,true,0); CHECK(hardware.tones==1);
+    indicators.tick(stats,&ap,true,1999); CHECK(hardware.tones==1);
+    indicators.tick(stats,&ap,true,2000); CHECK(hardware.tones==2);
+    ap.info.rssi=-35; indicators.tick(stats,&ap,true,2199); CHECK(hardware.tones==2);
+    indicators.tick(stats,&ap,true,2200); CHECK(hardware.tones==3);
+    stats.nowUs=18000001; indicators.tick(stats,&ap,true,2400); CHECK(hardware.stops==1);
+    ap.lastSeenUs=stats.nowUs; indicators.tick(stats,&ap,true,2500); CHECK(hardware.tones==4);
+    stats.running=false; indicators.tick(stats,&ap,true,2700); CHECK(hardware.stops==2);
+    stats.running=true; ap.info.bssid[5]^=1; indicators.tick(stats,&ap,true,2800); CHECK(hardware.tones==5);
+    indicators.tick(stats,nullptr,true,2801); CHECK(hardware.stops==3);
+    hardware.available=false; indicators.tick(stats,&ap,true,3000);
+    CHECK(!indicators.soundEnabled() && indicators.soundError() && hardware.stops==4);
+    indicators.tick(stats,&ap,true,6000); CHECK(hardware.tones==6);
+    indicators.enableSound(true); hardware.available=true;
+    indicators.tick(stats,&ap,true,UINT32_MAX-100); const auto tones=hardware.tones;
+    indicators.tick(stats,&ap,true,100); CHECK(hardware.tones==tones+1);
+    indicators.enableSound(false); CHECK(!indicators.soundEnabled() && !indicators.soundError());
+}
+void uiIndicatorTests() {
+    WifiScanner scanner; CHECK(scanner.begin()); AccessPointStore store; store.observe(parse(fixedUuid()));
+    PcapRing ring; Exporter exporter; DisplayUi ui; CHECK(ui.begin());
+    FakeIndicators hardware; FieldIndicators indicators(hardware); ui.attachIndicators(indicators);
+    uint32_t rejected=0,malformed=0;
+    auto tick=[&]() { mock::nowUs+=1000; ui.tick(store,scanner,exporter,ring,rejected,malformed,"ADV"); M5Cardputer.Keyboard.changed=false; };
+    auto key=[&](const char* text) { M5Cardputer.Keyboard.event(text); tick(); M5Cardputer.Keyboard.event(""); tick(); };
+    tick(); CHECK(ui.selection(store)!=nullptr && !ui.rgbPowerAvailable());
+    key("n"); CHECK(M5Cardputer.Display.lines[0]=="FIELD INDICATORS");
+    key("/"); CHECK(indicators.ledEnabled()); key("."); key("/"); CHECK(indicators.soundEnabled());
+    CHECK(M5Cardputer.Display.lines[5]=="ADV RGB needs light 255");
+    key("h"); CHECK(M5Cardputer.Display.lines[1]=="Up/Down: choose indicator"); key("`");
+    CHECK(M5Cardputer.Display.lines[0]=="FIELD INDICATORS");
+    key("b"); key("/"); key("/"); key("/"); CHECK(ui.rgbPowerAvailable()); key("b");
+    key("l"); CHECK(!ui.rgbPowerAvailable()); key("/"); CHECK(indicators.soundEnabled());
+    key("`"); CHECK(M5Cardputer.Display.lines[0].find("BRCM-RDR")==0);
+}
 void uiDisplayPowerTests() {
     mock::files.clear(); mock::sdPresent=true;
     WifiScanner scanner; CHECK(scanner.begin()); AccessPointStore store;
@@ -756,7 +817,7 @@ void uiDisplayPowerTests() {
 int main(int argc,char** argv) {
     try {
         parserTests(); storeTests(); scannerTests(); exportTests(argc>1?argv[1]:nullptr);
-        detectionTests(argc>1?argv[1]:nullptr); contextTests(argc>1?argv[1]:nullptr); uiTests(); uiCountryTests(); uiSortingTests(); uiFilterTests(); uiStateTests(); uiDisplayPowerTests(); corruptionTests();
+        detectionTests(argc>1?argv[1]:nullptr); contextTests(argc>1?argv[1]:nullptr); uiTests(); uiCountryTests(); uiSortingTests(); uiFilterTests(); uiStateTests(); uiDisplayPowerTests(); indicatorTests(); uiIndicatorTests(); corruptionTests();
         std::cout << "PASS: " << checks << " checks; 50,000 deterministic corrupt frames\n";
     } catch(const std::exception& e) { std::cerr << "FAIL: " << e.what() << '\n'; return 1; }
 }
