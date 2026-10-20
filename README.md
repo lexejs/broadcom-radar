@@ -1,12 +1,43 @@
-# Broadcom Radar for M5Stack Cardputer
+# Broadcom Radar: Wi-Fi/WPS detector for M5Stack Cardputer
 
-Portable 2.4 GHz Broadcom Wi-Fi/WPS fingerprint detector for **M5Stack Cardputer ADV** and the **original Cardputer**, installed through M5Launcher. Firmware version: **1.0.12**.
+Broadcom Radar is portable **ESP32-S3 firmware** that detects advertised Broadcom Wi-Fi/WPS fingerprints on **M5Stack Cardputer ADV** and the **original Cardputer**. The default scanner listens to 2.4 GHz Wi-Fi advertisements, displays the evidence and saves JSON, CSV and PCAP files to microSD. Installation uses the existing **M5Launcher**.
 
-Radar listens to Beacon and already present Probe Response frames, identifies three published Broadcom fingerprints, and shows the evidence on the device. It provides channel hopping or fixed-channel monitoring, a keyboard-driven interface, automatic Broadcom JSON/CSV/PCAP archives and manual scan export to microSD. Passive fingerprints do not establish vulnerability, patch status or safety. Default builds use no active scan, connection or packet-injection APIs. Separate experimental `-T` images add a manual WPS implementation probe using the stock public raw-TX API. The `-C` images test a narrowly scoped driver compatibility path and stop at WSC Start. The new `-F` images use that same path and then submit one empty first fragment to obtain an uncalibrated implementation-family candidate.
+**Firmware: 1.0.12** | **License: [MIT](LICENSE)** | **[Firmware downloads](https://github.com/lexejs/broadcom-radar/releases)**
 
-## Ready-to-install files
+**A Broadcom fingerprint is evidence of an advertised component, not a vulnerability or patch verdict.** Default builds use no active scan, connection or packet-injection APIs. Separate experimental images require a manually confirmed WPS exchange and provide uncalibrated implementation-family candidates.
 
-Local builds generate application images and their SHA-256 manifests under `dist/`; generated files are excluded from source history. Version 1.0.12 has not been published to GitHub.
+[Quick start](#quick-start) · [Choose firmware](#download-and-choose-a-firmware) · [Installation](#installation-through-the-existing-m5launcher) · [Controls](#controls) · [Results](#meaning-of-results) · [FAQ](#frequently-asked-questions) · [Build](#build-and-automated-checks) · [Research](RESEARCH.md)
+
+## What it does
+
+- Identifies three published Broadcom signatures in Beacon and already present Probe Response frames, with individual evidence for each result.
+- Prioritizes `BRCM+WPS` observations and offers reversible `ALL`, `WPS` and `B+W` display filters.
+- Hops through the configured country's channels or monitors one fixed channel.
+- Automatically archives Broadcom detections as JSON, CSV and a triggering-frame PCAP, independently of manual PCAP capture.
+- Exports the current scan and an optional bounded PCAP snapshot for analysis with tools such as Wireshark.
+- Provides keyboard navigation, brightness controls and optional screen blanking while reception continues.
+
+## Quick start
+
+1. Download the **passive** application image and matching `.bin.json` manifest for your hardware from [GitHub Releases](https://github.com/lexejs/broadcom-radar/releases). ADV uses `BRCM-RDR-1.0.12.bin`; original Cardputer uses `BRCM-RDR-S3-1.0.12.bin`.
+2. Verify the file size and SHA-256 against its manifest, then follow the [Launcher installation procedure](#installation-through-the-existing-m5launcher). The image needs a 1 MiB OTA application slot.
+3. Start Radar and wait through several channel sweeps. Select an AP and press **Enter** to inspect its evidence. Broadcom detections save automatically when microSD is available.
+4. Press **E** for a scan export. Press **P** before exporting if you also want the latest 16 advertisements in a manual PCAP. **H** opens help; **B** opens screen settings.
+
+For example, on macOS run `shasum -a 256 BRCM-RDR-1.0.12.bin`; on Linux use `sha256sum BRCM-RDR-1.0.12.bin`. Compare the result with the manifest's `sha256` value for that exact download.
+
+## Download and choose a firmware
+
+[GitHub Releases](https://github.com/lexejs/broadcom-radar/releases) contains versioned application images and matching SHA-256 manifests. Start with a passive image. `-T`, `-C` and `-F` are optional research builds that can transmit during a manually confirmed test; use them only on APs you own or have permission to test.
+
+| Mode | Filename marker | Behavior |
+| --- | --- | --- |
+| Passive scanner | No suffix before the version | Advertisement reception and archives; no experimental WPS session |
+| Stock WPS probe | `-T` | Manual exchange through stock public APIs; the tested SDK rejects authentication TX |
+| Transport experiment | `-C` | Scoped driver compatibility; stops at WSC Start |
+| Implementation fingerprint | `-F` | Compatible transport and one empty WPS first fragment; family candidate only |
+
+Local builds generate the same filenames under `dist/`; generated files are excluded from source history. The sizes below describe the development build. Release and CI builds can differ; use the manifest shipped with your exact image.
 
 | Hardware | Application image | Size |
 | --- | --- | --- |
@@ -24,17 +55,18 @@ Filenames include the firmware version from `include/RadarTypes.h`. The adjacent
 | Validation | Status |
 | --- | --- |
 | Eight firmware builds, host tests with ASan/UBSan and independent report/PCAP decoding | Passed on the development computer; protocol replies are simulated |
+| Cardputer ADV 1.0.12 installation | Launcher confirmed installation into a separate 1 MiB app slot with existing partitions preserved; application startup and display behavior were not checked |
 | Cardputer ADV 1.0.7 fingerprint reports | Eleven distinct attempts: four Fragment ACK candidates, one EAP Failure candidate, six timeouts; all restored capture and observed subsequent ads. Implementation-family labels remain uncalibrated |
 | Original Cardputer, detailed keyboard/battery checks, independent radio measurement, recovery and long-running stability | Still require hardware acceptance checks |
 
-All eight images require an existing OTA app slot of at least **1,048,576 bytes** after 64 KiB alignment. A read-only Launcher API check on 19 October 2026 found the development ADV Radar slot `brcmrd` at exactly 1,048,576 bytes. Other devices can have different partition layouts; check the actual slot before installation.
+All eight development images require an OTA app slot of at least **1,048,576 bytes** after 64 KiB alignment. Installation on the development ADV on 20 October 2026 confirmed a separate Radar slot of that size. Other devices can have different partition layouts; check the actual slot before installation.
 
 ## Installation through the existing M5Launcher
 
-1. Keep the existing Launcher installed. Before replacing an app, save its original `.bin`, back up that app and its data using the installed Launcher's backup facilities, and preserve `/config.conf` and `/bkp` on the SD card. Keep an off-card copy of important backups. Check the existing boot-to-Launcher/recovery setting before installation.
-2. Open **PMan** or the installed version's partition list. Identify an existing OTA app slot large enough for the `required_aligned_app_partition_bytes` in the selected `.bin.json`. The build enforces a conservative 1.5 MiB maximum, but this is a build guard, not a claim about your device's current free space. The resident Launcher partition must not be selected.
+1. Keep the existing Launcher installed. Before replacing an app, retain its original `.bin`, back up its data using the facilities available in your Launcher version, and preserve `/config.conf` and `/bkp` on the SD card. Keep an off-card copy of important backups. Check the existing boot-to-Launcher/recovery setting before installation.
+2. Open **PMan** or the installed version's partition list. Identify an OTA app slot large enough for the `required_aligned_app_partition_bytes` in the selected `.bin.json`. A Launcher version supporting dynamic partitions can instead create a separate app slot in confirmed free flash space. Preserve the resident Launcher and all other apps and data. The conservative 1.5 MiB build guard is not a measurement of free space on your device.
 3. Copy the matching `.bin` to the microSD card, for example `/firmware/BRCM-RDR-1.0.12.bin`. FAT32 on an MBR SDHC card is a conservative choice; the installed Launcher may also support other formats. Insert the card.
-4. Enter Launcher, open **SD**, select the `.bin`, then the install action. Choose the existing compatible OTA app slot, with the understanding that this replaces its previous app. Menu wording varies by Launcher version. Decline partition resizing, removal, compaction, formatting and filesystem installation if offered. This application needs no data partition. Stop if an existing slot does not fit.
+4. Enter Launcher, open **SD**, select the `.bin`, then the install action. Choose the intended compatible app slot, with the understanding that selecting an occupied slot replaces its app. Menu wording varies by Launcher version. Review any proposed new slot against the actual free space; decline removal, resizing or movement of existing partitions, compaction, formatting and filesystem installation. This application needs no data partition. Stop if installation requires changing other apps or their data.
 5. Start the installed app. The initial screen should show `BRCM-RDR 1.0.12`, its build variant, `RUN`, and a changing channel. Reception is passive; wait through several channel sweeps.
 
 **Do not flash `bootloader.bin`, `partitions.bin`, a merged image or a full dump. Do not run erase-flash.** `partitions-build-only.csv` exists solely for linking and size checking; it is never part of the installation package. Direct `pio run -t upload` is deliberately disabled to protect Launcher.
@@ -54,7 +86,7 @@ Use the real OTA partition label. This script does not read or write flash, resi
 - To update Radar, copy the newer matching application `.bin` to SD and repeat installation into the same sufficiently large slot. Radar has no persistent settings or filesystem partition; channel mode, results and PCAP selection reset on restart. Exports on SD remain available.
 - Radar disables Wi-Fi NVS credential loading and uses RAM Wi-Fi configuration. It never erases NVS or writes the partition table. Launcher itself controls installation metadata and backup behavior. Current Launcher source can reset the Wi-Fi driver's `net80211` namespace during installation, so preservation of every other application's configuration cannot be guaranteed by Radar. Preserve backups before installation; do not accept installer repartitioning or data-format changes.
 
-These procedures have been checked against upstream Launcher documentation and source, not exercised on physical hardware.
+Installation of the ADV `-F` image through Launcher 2.8.0 was confirmed on 20 October 2026. The SD source matched the local image byte for byte, the installer returned success, and a fresh partition listing identified the installed app while preserving every existing partition. Launcher was still running after installation. Application startup, the SD-menu installation route, rollback and return-to-Launcher procedures remain separate hardware checks.
 
 ## Controls
 
@@ -101,6 +133,40 @@ Only changed rows are transferred to the display, at most twice per second for s
 | `INSUFFICIENT_DATA` | `WAIT` | Only malformed/incomplete attributable advertisements have been observed |
 
 No result establishes vulnerability, patch status or safety. A proprietary IE may originate in a Broadcom driver while the WPS implementation comes from another source. Default builds do not implement active transactions or packet transmission. BSSID OUI attribution is intentionally omitted.
+
+## Frequently asked questions
+
+### How does Broadcom Radar detect Broadcom Wi-Fi components?
+
+It parses received advertisements for a characteristic Broadcom vendor IE, a fixed advertised WPS UUID, or at least two matching default WPS identity fields. These are protocol fingerprints, not a lookup of the MAC address manufacturer. The exact bytes, matching rules and original sources are documented in [RESEARCH.md](RESEARCH.md#exact-passive-signatures).
+
+### Does BRCM+WPS mean that a router is vulnerable?
+
+No. `BRCM+WPS` means the same BSSID advertised both a Broadcom signature and WPS. The badge raises its display priority. It does not establish which WPS service runs, its software version, whether a fix is installed or whether a vulnerability is reachable. `NONE` and `WAIT` also do not mean safe.
+
+### Can the experimental test identify hostapd?
+
+It can report `HOSTAPD_LIKE` from one specific response pattern. This is an uncalibrated behavior-family candidate, not proof that the router runs the hostapd process. The alternative `BRCM_WPS_LIKE` is equally limited. Timeouts and unsupported transmission return `UNKNOWN`. See [experimental tests](#experimental-on-device-wps-tests) for the exact exchange and validation boundary.
+
+### Does it support 5 GHz or 6 GHz Wi-Fi?
+
+No. This ESP32-S3 application receives 2.4 GHz Wi-Fi only. The default build uses the configured PL country policy and channels 1-13. Rebuild with the correct operating country before using it elsewhere.
+
+### Why does the list stop at 128 networks?
+
+The AP store reserves bounded RAM for 128 distinct BSSIDs. Existing entries keep updating when full; new entries are dropped and counted. A display filter does not free entries. Automatic Broadcom archives can still save an immediately recognizable new detection outside the full list. Pressing R twice clears live records while preserving files already saved to SD.
+
+### What is in a PCAP file?
+
+PCAP stores captured frames for packet analysis. An automatic Broadcom archive contains its single triggering advertisement; optional manual capture retains the latest 16 advertisements. Both use raw IEEE 802.11 PCAP, without RadioTap or FCS. Experimental tests have a separate bounded session trace. JSON retains evidence and metadata that this raw PCAP format does not include.
+
+### Does turning the screen off stop scanning?
+
+No. L blanks the backlight and stops drawing while reception, channel hopping and automatic archives continue. The first key wakes the display without executing its normal command. Brightness and optional idle timeouts are available through B; settings reset on restart. Battery-life savings have not been measured.
+
+### Does the test count mean thousands of router vulnerability checks?
+
+No. The host-test total counts assertions against synthetic frames, state transitions, UI actions and export results. It includes 50,000 deterministic damaged-frame inputs. It does not count nearby networks, real routers tested or confirmed vulnerabilities.
 
 ## Experimental on-device WPS tests
 
@@ -196,4 +262,8 @@ If that Homebrew path does not exist, use another installed Clang with libFuzzer
 
 ## Physical acceptance checks still required
 
-Install through the existing Launcher without repartitioning; confirm return to Launcher and restore of the prior app. On both hardware variants check keyboard navigation, SD present/absent, fixed channel and hopping, duplicate SSIDs, report export and several hours of uptime/minimum-heap telemetry. With a separate monitor-mode receiver verify that the Cardputer sends no Probe Request, authentication, association, EAP/WPS, deauthentication or other Wi-Fi traffic while Radar runs. Controlled advertisement fixtures or comparison against an independently captured Beacon trace are needed to validate RSSI/channel/FCS behavior on the actual device. These checks remain pending beyond the user-reported ADV basic operation and display check.
+Install through the existing Launcher while preserving other apps and data; confirm return to Launcher and restore of the prior app. On both hardware variants check keyboard navigation, SD present/absent, fixed channel and hopping, duplicate SSIDs, report export and several hours of uptime/minimum-heap telemetry. With a separate monitor-mode receiver verify that the Cardputer sends no Probe Request, authentication, association, EAP/WPS, deauthentication or other Wi-Fi traffic while a default passive build runs. Controlled advertisement fixtures or comparison against an independently captured Beacon trace are needed to validate RSSI/channel/FCS behavior on the actual device. These checks remain pending beyond the user-reported ADV basic operation, earlier display check and separately confirmed 1.0.12 installation.
+
+## License and sources
+
+Original project code and documentation are available under the [MIT License](LICENSE). Third-party components retain their own licenses; the [dependency notices](#build-and-automated-checks) link to their upstream terms. The fingerprint rules are independently implemented from the published work credited in [RESEARCH.md](RESEARCH.md#primary-sources).

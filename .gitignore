@@ -11,3 +11,8 @@ __pycache__/
 scan-*.json
 scan-*.csv
 scan-*.pcap
+brcm-*.json
+brcm-*.csv
+brcm-*.pcap
+test-*.json
+test-*.pcap
