@@ -8,7 +8,7 @@ Built for **M5Stack Cardputer ADV** and the **original Cardputer** (ESP32-S3), w
 
 **Published release 1.0.12** · [MIT license](LICENSE) · [All releases](https://github.com/lexejs/broadcom-radar/releases)
 
-Development source: **1.0.16**, not yet published as a release. The downloads below remain the published 1.0.12 images.
+Development source: **1.0.17**, not yet published as a release. The downloads below remain the published 1.0.12 images.
 
 [Download](#download-and-choose-a-firmware) · [Get started](#quick-start) · [Read the results](#meaning-of-results) · [Controls](#controls) · [FAQ](#frequently-asked-questions) · [Research](RESEARCH.md)
 
@@ -317,7 +317,7 @@ All eight development images require an OTA app slot of at least **1,048,576 byt
 - AP capacity: **128 BSSIDs** at a time. At capacity, old `NONE`/`WAIT` records can be replaced; Broadcom/WPS records, the current selection and test target are protected. All-protected capacity still drops new observations. Replacements start with empty evidence and a new discovery position; they are counted separately from drops. Identical SSIDs do not merge different BSSIDs. Evidence is cumulative; later missing or malformed fields never erase confirmed evidence. RSSI uses the latest observation; maximum RSSI is also retained.
 - WPS reassembly: **1024 bytes per advertisement**; text fields: **64 bytes each**; SSID: **32 raw bytes**; vendor IE summaries: **8 per AP**. Oversized text is marked truncated and cannot match a default identity by prefix. Complete nonempty identity fields are retained by completeness/length, not replaced by missing fields. Different matching identity fields across complete advertisements can combine into the default-identity signature; the field mask is exported.
 - Malformed advertisements contribute only attributable metadata and counters, not WPS identity/evidence. A later complete advertisement resolves an initially inconclusive entry. Invalid headers, unsupported frame types, invalid BSSIDs and fragmented/protected management frames are discarded. Empty WPS attribute payloads are inconclusive.
-- All parser, AP, queue and PCAP storage is bounded. The parsers and aggregation allocate no heap memory. Library initialization and bounded keyboard/SD internals use heap memory. Wi-Fi receive buffers are reduced to four static/eight dynamic buffers and AMPDU reception is disabled. USB serial emits uptime, free/minimum heap and drop counters every five seconds for on-device stability checks.
+- All parser, AP, queue and PCAP storage is bounded. The parsers and aggregation allocate no heap memory. Library initialization and bounded keyboard/SD internals use heap memory. Wi-Fi receive buffers are reduced to four static/eight dynamic buffers and AMPDU reception is disabled. USB serial emits uptime, free/minimum heap and drop counters every five seconds for on-device stability checks. Development 1.0.17 also reports `stack_min_bytes`, the minimum free loop-task stack observed by FreeRTOS since startup. The firmware scan path and experimental revalidation each own a reusable 1024-byte `AdvertisementParser` workspace outside the task stack. Separate tasks need separate parser instances; the compatibility `parseAdvertisement` wrapper still uses a caller-owned stack workspace. Static build inspection does not establish a measured device stack margin.
 
 
 ### Physical acceptance checks still required

@@ -1,5 +1,5 @@
 #pragma once
-#include "RadarTypes.h"
+#include "Parsers.h"
 namespace radar {
 constexpr size_t kProbeRecords = 16, kProbeBytes = 512;
 enum class ProbeStage { Idle, Requested, Advertisement, Authentication, Association, Identity, Start, Differential, Cleanup, Restore, Done };
@@ -86,6 +86,7 @@ private:
     uint32_t attemptId_ = 0;
     ProbeResult result_;
     ProbeRecord records_[kProbeRecords]{};
+    AdvertisementParser parser_;
     size_t recordCount_ = 0, pendingLength_ = 0, associationLength_ = 0;
     uint8_t station_[6]{}, pending_[kProbeBytes]{}, associationIes_[384]{};
     uint64_t deadlineUs_ = 0, lastTxUs_ = 0;

@@ -197,7 +197,7 @@ void WpsProbe::receive(const Frame& frame) {
         ++result_.advertisements;
         if (result_.advertisements == 1) record(p, n, frame.timestampUs, false);
         Observation fresh;
-        if (!parseAdvertisement(p, n, frame.rssi, frame.channel, frame.timestampUs, fresh) || fresh.malformed) { ++result_.malformed; return; }
+        if (!parser_.parse(p, n, frame.rssi, frame.channel, frame.timestampUs, fresh) || fresh.malformed) { ++result_.malformed; return; }
         if (fresh.channel != target_.channel) { ++result_.wrongChannel; return; }
         if (fresh.ssid.length != target_.ssid.length || std::memcmp(fresh.ssid.data, target_.ssid.data, fresh.ssid.length)) { ++result_.wrongSsid; return; }
         if (!fresh.wpsAdvertised) { observedNoWps_ = true; ++result_.noWps; return; }

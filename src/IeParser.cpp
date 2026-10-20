@@ -6,6 +6,11 @@ bool isAdvertisement(const uint8_t* data, size_t length) {
 }
 bool parseAdvertisement(const uint8_t* data, size_t length, int8_t rssi,
                         uint8_t channel, uint64_t timestampUs, Observation& out) {
+    AdvertisementParser parser;
+    return parser.parse(data, length, rssi, channel, timestampUs, out);
+}
+bool AdvertisementParser::parse(const uint8_t* data, size_t length, int8_t rssi,
+                                uint8_t channel, uint64_t timestampUs, Observation& out) {
     out = Observation{};
     if (!isAdvertisement(data, length) || length < 36 || length > kMaxFrame) return false;
     // No DS, protected, ordered or fragmented management frames are interpreted.
@@ -17,7 +22,7 @@ bool parseAdvertisement(const uint8_t* data, size_t length, int8_t rssi,
     out.rssi = rssi; out.channel = out.captureChannel = channel;
     out.seenUs = timestampUs; out.subtype = data[0] >> 4;
     out.capabilities = uint16_t(data[34]) | (uint16_t(data[35]) << 8);
-    uint8_t wps[1024];
+    auto& wps = wps_;
     size_t wpsLength = 0;
     size_t offset = 36;
     while (offset < length) {

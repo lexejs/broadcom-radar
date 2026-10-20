@@ -7,12 +7,14 @@
 #endif
 #include "DisplayUi.h"
 #include "WpsProbeRadio.h"
+#include <freertos/task.h>
 
 namespace {
 radar::WifiScanner scanner;
 radar::AccessPointStore store;
 radar::PcapRing pcap;
 radar::AdvertisementCache context;
+radar::AdvertisementParser parser;
 radar::Exporter exporter;
 radar::DisplayUi ui;
 radar::Frame frame;
@@ -77,7 +79,7 @@ void loop() {
 #endif
         radar::Observation observation;
         pcap.add(frame);
-        if (radar::parseAdvertisement(frame.bytes, frame.length, frame.rssi, frame.channel, frame.timestampUs, observation)) {
+        if (parser.parse(frame.bytes, frame.length, frame.rssi, frame.channel, frame.timestampUs, observation)) {
             if (observation.malformed) ++malformed;
             const auto* ap = store.observe(observation);
             auto stats = scanner.stats();
@@ -100,8 +102,8 @@ void loop() {
     static uint32_t lastHealth = 0;
     if (millis() - lastHealth >= 5000) {
         const auto stats = scanner.stats();
-        Serial.printf("uptime_ms=%u heap=%u min_heap=%u aps=%u rx=%u queue_drops=%u store_drops=%u\n",
-                      unsigned(millis()), ESP.getFreeHeap(), ESP.getMinFreeHeap(), unsigned(store.size()), stats.received, stats.queueDrops, store.dropped());
+        Serial.printf("uptime_ms=%u heap=%u min_heap=%u aps=%u rx=%u queue_drops=%u store_drops=%u stack_min_bytes=%u\n",
+                      unsigned(millis()), ESP.getFreeHeap(), ESP.getMinFreeHeap(), unsigned(store.size()), stats.received, stats.queueDrops, store.dropped(), unsigned(uxTaskGetStackHighWaterMark(nullptr) * sizeof(StackType_t)));
         lastHealth = millis();
     }
     delay(2);

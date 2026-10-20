@@ -30,6 +30,13 @@ struct StringSink : Sink {
 };
 struct FailingSink : Sink { bool write(const uint8_t*, size_t) override { return false; } };
 void parserTests() {
+    AdvertisementParser firstParser, secondParser;
+    Observation reused, separate;
+    const auto fixed=fixedUuid(); const auto plain=beacon(); const auto ordinary=ordinaryWps();
+    CHECK(firstParser.parse(fixed.data(),fixed.size(),-50,6,1,reused) && reused.evidence==FixedUuid);
+    CHECK(secondParser.parse(ordinary.data(),ordinary.size(),-60,6,2,separate) && separate.wpsAdvertised && !separate.evidence);
+    CHECK(firstParser.parse(plain.data(),plain.size(),-50,6,3,reused) && !reused.wpsAdvertised && !reused.evidence && !reused.wps.uuidE.length);
+    CHECK(secondParser.parse(fixed.data(),fixed.size(),-60,6,4,separate) && separate.evidence==FixedUuid);
     auto f = beacon(); proprietary(f);
     CHECK(parse(f).evidence == ProprietaryIe);
     CHECK(classify(aggregate(f)) == Classification::BroadcomSignature);
