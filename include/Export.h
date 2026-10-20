@@ -34,6 +34,7 @@ private:
     bool open(const char* extension);
     bool finishFile(const char* extension);
     bool publishFile(const char* extension);
+    bool indexSequences();
     bool nextSequence();
     void filename(char* path, size_t capacity, const char* ext, bool partial) const;
     struct SavedDetection {
@@ -55,6 +56,7 @@ private:
     bool probe_ = false;
     unsigned probeSequence_ = 0;
     bool available_ = false;
+    bool namesIndexed_ = false;
     char message_[64] = "SD unavailable";
     const WpsProbe* reportProbe_ = nullptr;
     uint32_t reportAttempt_ = 0;

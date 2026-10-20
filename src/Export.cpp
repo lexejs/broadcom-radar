@@ -27,6 +27,7 @@ bool Exporter::FileSink::flush() {
 }
 bool Exporter::mount() {
     if (busy()) return available_;
+    namesIndexed_ = false;
     // SD.begin() reuses its cached mount after an I/O failure. Retry from a clean bus state.
     SD.end();
     spi_.end();
@@ -76,13 +77,51 @@ bool Exporter::start(const AccessPointStore& store, const ScanStats& stats, cons
     std::snprintf(message_, sizeof(message_), "Saving scan-%03u; paused", sequence_);
     return true;
 }
+bool Exporter::indexSequences() {
+    auto directory = SD.open("/broadcom-radar");
+    if (!directory || !directory.isDirectory()) { fail("SD directory unavailable"); return false; }
+    // Enumerate names without opening each file: repeated exists() calls rescan FAT directories.
+    while (true) {
+        bool isDirectory = false;
+        const auto path = directory.getNextFileName(&isDirectory);
+        if (!path.length()) break;
+        if (isDirectory) continue;
+        const char* name = std::strrchr(path.c_str(), '/');
+        name = name ? name + 1 : path.c_str();
+        unsigned* sequence = nullptr;
+        if (!std::strncmp(name, "scan-", 5)) { sequence = &sequence_; name += 5; }
+        else if (!std::strncmp(name, "brcm-", 5)) { sequence = &detectionSequence_; name += 5; }
+        else if (!std::strncmp(name, "test-", 5)) { sequence = &probeSequence_; name += 5; }
+        if (!sequence) continue;
+        unsigned value = 0, digits = 0;
+        while (*name >= '0' && *name <= '9' && digits < 5) {
+            value = value * 10 + (*name++ - '0'); ++digits;
+        }
+        if (digits < 3 || digits > 4 || !value || value > 9999) continue;
+        bool recognized = false;
+        for (const char* extension : {".json", ".csv", ".pcap", ".pcapng"}) {
+            const size_t size = std::strlen(extension);
+            if (!std::strncmp(name, extension, size) && (!name[size] || !std::strcmp(name + size, ".part"))) {
+                recognized = true; break;
+            }
+        }
+        if (recognized && value > *sequence) *sequence = value;
+    }
+    namesIndexed_ = true;
+    return true;
+}
 bool Exporter::nextSequence() {
+    if (!namesIndexed_ && !indexSequences()) return false;
     auto& sequence = probe_ ? probeSequence_ : detection_ ? detectionSequence_ : sequence_;
     // Never overwrite a prior export, including interrupted .part files.
     while (sequence < 9999) {
         ++sequence; bool exists = false; char path[80];
-        for (const char* ext : {"json", "csv", "pcap", "pcapng"}) for (bool partial : {false, true}) {
-            filename(path, sizeof(path), ext, partial); exists |= SD.exists(path);
+        for (const char* ext : {"json", "csv", "pcap", "pcapng"}) {
+            for (bool partial : {false, true}) {
+                filename(path, sizeof(path), ext, partial);
+                if (SD.exists(path)) { exists = true; break; }
+            }
+            if (exists) break;
         }
         if (!exists) return true;
     }

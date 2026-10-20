@@ -454,6 +454,7 @@ void uiTests() {
     M5Canvas::failAllocation=false;
 }
 void uiCountryTests() {
+    mock::files.clear(); mock::sdPresent=true;
     WifiScanner scanner; CHECK(scanner.begin()); CHECK(scanner.setRunning(false));
     AccessPointStore store; auto observation=parse(ordinaryWps()); observation.channel=13; store.observe(observation);
     PcapRing ring; Exporter exporter; CHECK(exporter.mount()); DisplayUi ui; CHECK(ui.begin());
@@ -472,7 +473,7 @@ void uiCountryTests() {
     CHECK(M5Cardputer.Display.lines[0]=="COUNTRY SETTINGS" && !scanner.stats().running);
     CHECK(std::string(scanner.country())=="US");
     mock::result=ESP_OK; enter(); CHECK(std::string(scanner.country())=="JP" && !scanner.stats().running);
-    CHECK(scanner.setCountry("US")); mock::files.clear(); key("e"); while(exporter.busy()) tick();
+    CHECK(scanner.setCountry("US")); key("e"); while(exporter.busy()) tick();
     const auto& json=mock::files.at("/broadcom-radar/scan-001.json");
     CHECK(std::string(json.begin(),json.end()).find("\"country\":\"US\"")!=std::string::npos);
     CHECK(M5Cardputer.Display.boundsOk);
@@ -534,6 +535,7 @@ void uiSortingTests() {
     CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS Broadcom-A")!=std::string::npos);
 }
 void uiFilterTests() {
+    mock::files.clear(); mock::sdPresent=true;
     WifiScanner scanner; CHECK(scanner.begin()); AccessPointStore store;
     store.observe(parse(beacon(text("Plain"),1)));
     Data identity; tlv(identity,0x1021,text("Example Vendor"));
@@ -576,7 +578,7 @@ void uiFilterTests() {
     CHECK(M5Cardputer.Display.lines[4]=="No matching networks");
     key("."); enter(); CHECK(M5Cardputer.Display.lines[0].find("BRCM-RDR ")==0);
     // Manual export includes records hidden by the display filter.
-    mock::files.clear(); mock::sdPresent=true; key("e"); CHECK(exporter.busy());
+    key("e"); CHECK(exporter.busy());
     key("f"); // Filter changes are disabled while exporting.
     for(unsigned i=0;i<100 && exporter.busy();++i) tick();
     CHECK(!exporter.busy() && scanner.stats().running);
@@ -703,6 +705,38 @@ void sdRemountTests() {
     while(exporter.busy()) exporter.tick(); CHECK(exporter.available());
     mock::sdPresent=false; CHECK(!exporter.start(store,stats,ring,"ADV")); CHECK(!exporter.mount());
     mock::sdPresent=true; CHECK(exporter.mount() && !SD.needsReinit);
+}
+void exportSequenceTests() {
+    mock::files.clear(); mock::sdPresent=true;
+    for (unsigned i=1;i<=268;++i) for (const char* extension : {"json","csv","pcap"}) {
+        char path[80]; std::snprintf(path,sizeof(path),"/broadcom-radar/brcm-%03u.%s",i,extension);
+        mock::files[path]={1,2,3};
+    }
+    mock::files["/broadcom-radar/scan-009.pcapng.part"]={4};
+    mock::files["/broadcom-radar/test-031.json"]={5};
+    mock::files["/broadcom-radar/scan-xyz.json"]={6};
+    mock::files["/broadcom-radar/scan-9999.txt"]={7};
+    const auto originals=mock::files;
+    Exporter exporter; CHECK(exporter.mount()); SD.existsCalls=0; mock::directoryReads=0;
+    auto bytes=beacon(); proprietary(bytes); auto observation=parse(bytes);
+    Frame frame; frame.length=bytes.size(); std::memcpy(frame.bytes,bytes.data(),bytes.size());
+    ScanStats stats; CHECK(exporter.saveDetection(observation,nullptr,frame,stats,"ADV"));
+    CHECK(mock::files.count("/broadcom-radar/brcm-269.json"));
+    CHECK(SD.existsCalls<32); // Allocation must not look up each old archive separately.
+    CHECK(mock::directoryReads<=originals.size()+1 && mock::directoryReads>0);
+    for (const auto& entry : originals) CHECK(mock::files.at(entry.first)==entry.second);
+    const auto reads=mock::directoryReads;
+    AccessPointStore store; PcapRing ring;
+    CHECK(exporter.start(store,stats,ring,"ADV")); while(exporter.busy()) exporter.tick();
+    CHECK(mock::files.count("/broadcom-radar/scan-010.json"));
+    CHECK(mock::directoryReads==reads); // One directory pass covers all three prefixes.
+    mock::files["/broadcom-radar/scan-011.csv.part"]={8};
+    CHECK(exporter.start(store,stats,ring,"ADV")); while(exporter.busy()) exporter.tick();
+    CHECK(mock::files.count("/broadcom-radar/scan-012.json"));
+    CHECK(mock::files.at("/broadcom-radar/scan-011.csv.part")==Data({8}));
+    mock::files["/broadcom-radar/scan-9999.pcap.part"]={9};
+    CHECK(exporter.mount() && !exporter.start(store,stats,ring,"ADV"));
+    CHECK(mock::files.at("/broadcom-radar/scan-9999.pcap.part")==Data({9}));
 }
 void diagnosticLogTests() {
     struct Port {
@@ -862,7 +896,7 @@ void uiDisplayPowerTests() {
 int main(int argc,char** argv) {
     try {
         parserTests(); storeTests(); scannerTests(); exportTests(argc>1?argv[1]:nullptr);
-        detectionTests(argc>1?argv[1]:nullptr); contextTests(argc>1?argv[1]:nullptr); uiTests(); uiCountryTests(); uiSortingTests(); uiFilterTests(); uiStateTests(); uiDisplayPowerTests(); indicatorTests(); diagnosticLogTests(); uiIndicatorTests(); sdRemountTests(); corruptionTests();
+        detectionTests(argc>1?argv[1]:nullptr); contextTests(argc>1?argv[1]:nullptr); uiTests(); uiCountryTests(); uiSortingTests(); uiFilterTests(); uiStateTests(); uiDisplayPowerTests(); indicatorTests(); diagnosticLogTests(); uiIndicatorTests(); sdRemountTests(); exportSequenceTests(); corruptionTests();
         std::cout << "PASS: " << checks << " checks; 50,000 deterministic corrupt frames\n";
     } catch(const std::exception& e) { std::cerr << "FAIL: " << e.what() << '\n'; return 1; }
 }
