@@ -1,0 +1,217 @@
+{
+  "firmware": "1.0.12",
+  "screens": [
+    {
+      "file": "network-list.png",
+      "rows": [
+        {
+          "text": "BRCM-RDR 1.0.12 P ALL",
+          "foreground": 1,
+          "background": 3
+        },
+        {
+          "text": "RUN HOP C01 82% #1",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "AP:5/5 B:2 SD:OK",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": ">BRCM+WPS Demo BRCM    -43",
+          "foreground": 2,
+          "background": 3
+        },
+        {
+          "text": " BRCM     Demo Radio   -57",
+          "foreground": 2,
+          "background": 0
+        },
+        {
+          "text": " WPS      Demo WPS     -62",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": " NONE     Demo Guest   -71",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": " WAIT     Demo Pen...  -80",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "F:ALL S:pause M:CH H:help",
+          "foreground": 4,
+          "background": 0
+        }
+      ]
+    },
+    {
+      "file": "network-details.png",
+      "rows": [
+        {
+          "text": "1/7 SUMMARY",
+          "foreground": 1,
+          "background": 3
+        },
+        {
+          "text": "Demo BRCM",
+          "foreground": 1,
+          "background": 3
+        },
+        {
+          "text": "",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "02:00:00:00:00:01",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Signal:-43 Max:-43 dBm",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Channel:6 WPS:YES",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Maker: Broadcom",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Model: BroadcomAP",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "BRCM+WPS Last:0s",
+          "foreground": 1,
+          "background": 0
+        }
+      ]
+    },
+    {
+      "file": "detection-evidence.png",
+      "rows": [
+        {
+          "text": "2/7 EVIDENCE",
+          "foreground": 1,
+          "background": 3
+        },
+        {
+          "text": "Demo BRCM",
+          "foreground": 1,
+          "background": 3
+        },
+        {
+          "text": "Observed: BRCM+WPS",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Broadcom IE: YES",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Fixed UUID: YES",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Defaults: 2+ fields match",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Passive signatures only",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "No vulnerability proof",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "AP patch status unknown",
+          "foreground": 1,
+          "background": 0
+        }
+      ]
+    },
+    {
+      "file": "screen-settings.png",
+      "rows": [
+        {
+          "text": "SCREEN SETTINGS",
+          "foreground": 1,
+          "background": 3
+        },
+        {
+          "text": "Settings reset on restart",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Brightness: 100 / 255",
+          "foreground": 1,
+          "background": 3
+        },
+        {
+          "text": "Auto off: disabled",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Turn display off",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Any key wakes the display",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Capture and saves continue",
+          "foreground": 1,
+          "background": 0
+        },
+        {
+          "text": "Timer waits during tests",
+          "foreground": 1,
+          "background": 0
+        }
+      ]
+    }
+  ],
+  "provenance": {
+    "synthetic_networks": true,
+    "hardware_capture": false,
+    "native_size": [
+      240,
+      135
+    ],
+    "image_scale": 3,
+    "font_scale": 1.5,
+    "m5gfx_version": "0.2.33",
+    "font_sha256": "f11beeaa06b8eb7605e9192636bbe6f9f810f7281aa24406f26109a7011e9ceb"
+  }
+}
