@@ -1,6 +1,17 @@
 #pragma once
 #include "Parsers.h"
 namespace radar {
+bool matchingAdvertisementContext(const Frame& trigger, const Frame& context);
+class AdvertisementCache {
+public:
+    void clear();
+    void remember(const Frame& frame, const Observation& observation, uint64_t epoch);
+    const Frame* companion(const Frame& trigger) const;
+private:
+    struct Entry { uint8_t bssid[6]{}; uint64_t lastSeen = 0; Frame beacon, response; };
+    Entry entries_[2]{};
+    uint64_t epoch_ = 0;
+};
 class AccessPointStore {
 public:
     const AccessPoint* observe(const Observation& observation);

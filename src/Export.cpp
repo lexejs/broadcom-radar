@@ -94,8 +94,9 @@ bool Exporter::needsDetection(const Observation& observation, const AccessPoint*
     return true;
 }
 bool Exporter::saveDetection(const Observation& observation, const AccessPoint* aggregate, const Frame& frame,
-                             const ScanStats& stats, const char* hardware) {
+                             const ScanStats& stats, const char* hardware, const Frame* companion) {
     if (!needsDetection(observation, aggregate, stats.nowUs)) return false;
+    if (companion && !matchingAdvertisementContext(frame, *companion)) companion = nullptr;
     // Retry only on a later received advertisement, at most once every five seconds after an SD error.
     retryAfterUs_ = stats.nowUs + 5000000ULL;
     detection_ = true; probe_ = false;
@@ -113,7 +114,7 @@ bool Exporter::saveDetection(const Observation& observation, const AccessPoint* 
     bool good = open("json");
     if (good) {
         FileSink sink(file_);
-        good = writeDetectionJsonHeader(sink, stats, hardware, stats.country) &&
+        good = writeDetectionJsonHeader(sink, stats, hardware, stats.country, companion != nullptr) &&
                writeJsonAp(sink, *aggregate, true) && writeJsonFooter(sink) && sink.flush();
     }
     file_.flush(); good = good && file_.getWriteError() == 0; file_.close();
@@ -124,7 +125,7 @@ bool Exporter::saveDetection(const Observation& observation, const AccessPoint* 
     file_.flush(); good = good && file_.getWriteError() == 0; file_.close();
     if (good) good = open("pcap");
     if (good) {
-        FileSink sink(file_); good = writePcapHeader(sink) && writePcapFrame(sink, frame) && sink.flush();
+        FileSink sink(file_); good = writePcapHeader(sink) && (!companion || writePcapFrame(sink, *companion)) && writePcapFrame(sink, frame) && sink.flush();
     }
     file_.flush(); good = good && file_.getWriteError() == 0; file_.close();
     // Publish JSON last: a final detection JSON means all three files were completed.

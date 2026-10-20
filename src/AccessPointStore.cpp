@@ -1,6 +1,41 @@
 #include "AccessPointStore.h"
 #include <cstring>
 namespace radar {
+bool matchingAdvertisementContext(const Frame& trigger, const Frame& context) {
+    return trigger.length >= 36 && trigger.length <= kMaxFrame && context.length >= 36 && context.length <= kMaxFrame &&
+        (trigger.bytes[0] == 0x80 || trigger.bytes[0] == 0x50) && (context.bytes[0] == 0x80 || context.bytes[0] == 0x50) &&
+        trigger.bytes[0] != context.bytes[0] && trigger.channel == context.channel &&
+        !std::memcmp(trigger.bytes + 16, context.bytes + 16, 6) && context.timestampUs <= trigger.timestampUs &&
+        trigger.timestampUs - context.timestampUs <= 30000000ULL;
+}
+void AdvertisementCache::clear() {
+    for (auto& entry : entries_) {
+        entry.beacon.length = entry.response.length = 0; entry.lastSeen = 0;
+        std::memset(entry.bssid, 0, sizeof(entry.bssid));
+    }
+}
+void AdvertisementCache::remember(const Frame& frame, const Observation& observation, uint64_t epoch) {
+    if (epoch_ != epoch) { clear(); epoch_ = epoch; }
+    if (observation.malformed || frame.length < 36 || frame.length > kMaxFrame ||
+        (frame.bytes[0] != 0x80 && frame.bytes[0] != 0x50) || std::memcmp(frame.bytes + 16, observation.bssid, 6)) return;
+    Entry* selected = nullptr;
+    for (auto& entry : entries_) if (!std::memcmp(entry.bssid, observation.bssid, 6)) selected = &entry;
+    if (!selected) {
+        selected = &entries_[0];
+        for (auto& entry : entries_) if (entry.lastSeen < selected->lastSeen) selected = &entry;
+        selected->beacon.length = selected->response.length = 0;
+        std::memcpy(selected->bssid, observation.bssid, 6);
+    }
+    (frame.bytes[0] == 0x80 ? selected->beacon : selected->response) = frame;
+    selected->lastSeen = frame.timestampUs;
+}
+const Frame* AdvertisementCache::companion(const Frame& trigger) const {
+    for (const auto& entry : entries_) {
+        const Frame& candidate = trigger.bytes[0] == 0x80 ? entry.response : entry.beacon;
+        if (matchingAdvertisementContext(trigger, candidate)) return &candidate;
+    }
+    return nullptr;
+}
 void AccessPointStore::clear() {
     size_ = 0; dropped_ = replacements_ = nextDiscovery_ = 0;
     std::memset(protected_, 0, sizeof(protected_));

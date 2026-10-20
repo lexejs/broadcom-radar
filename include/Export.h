@@ -11,7 +11,7 @@ public:
     bool start(const AccessPointStore& store, const ScanStats& stats, const PcapRing& ring, const char* hardware);
     bool needsDetection(const Observation& observation, const AccessPoint* aggregate, uint64_t nowUs) const;
     bool saveDetection(const Observation& observation, const AccessPoint* aggregate, const Frame& frame,
-                       const ScanStats& stats, const char* hardware);
+                       const ScanStats& stats, const char* hardware, const Frame* companion = nullptr);
     bool saveProbe(const WpsProbe& probe, const char* hardware);
     void tick();
     bool busy() const { return phase_ != Phase::Idle; }

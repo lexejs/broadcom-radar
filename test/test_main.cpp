@@ -327,6 +327,35 @@ void detectionTests(const char* output) {
     CHECK(rename.saveDetection(observation,nullptr,frame,stats,"Cardputer ADV"));
     CHECK(mock::files.count("/broadcom-radar/brcm-002.json"));
 }
+void contextTests(const char* output) {
+    AdvertisementCache cache; Frame beaconFrame, response;
+    auto bytes=beacon(); proprietary(bytes);
+    beaconFrame.length=bytes.size(); beaconFrame.timestampUs=2000000; beaconFrame.channel=6;
+    std::memcpy(beaconFrame.bytes,bytes.data(),bytes.size());
+    auto responseBytes=ordinaryWps(); responseBytes[0]=0x50;
+    response.length=responseBytes.size(); response.timestampUs=1000000; response.channel=6;
+    std::memcpy(response.bytes,responseBytes.data(),responseBytes.size());
+    cache.remember(response,parse(responseBytes),1); cache.remember(beaconFrame,parse(bytes),1);
+    const auto* paired=cache.companion(beaconFrame); CHECK(paired && paired->bytes[0]==0x50);
+    Frame changed=beaconFrame; changed.channel=1; CHECK(!cache.companion(changed));
+    changed=beaconFrame; changed.timestampUs=32000001; CHECK(!cache.companion(changed));
+    changed=beaconFrame; changed.bytes[21]=99; CHECK(!cache.companion(changed));
+    changed=beaconFrame; changed.timestampUs=999999; CHECK(!cache.companion(changed));
+    mock::files.clear(); mock::sdPresent=true; Exporter exporter; ScanStats stats; stats.nowUs=2000000;
+    CHECK(exporter.saveDetection(parse(bytes),nullptr,beaconFrame,stats,"Cardputer ADV",paired));
+    const auto& json=mock::files.at("/broadcom-radar/brcm-001.json");
+    CHECK(std::string(json.begin(),json.end()).find("\"pcap_frames\":2")!=std::string::npos);
+    if(output) for(const char* extension:{"json","pcap"}) {
+        const auto& data=mock::files.at(std::string("/broadcom-radar/brcm-001.")+extension);
+        std::ofstream file(std::string(output)+"/context-001."+extension,std::ios::binary);
+        file.write(reinterpret_cast<const char*>(data.data()),data.size()); CHECK(bool(file));
+    }
+    cache.remember(beaconFrame,parse(bytes),2); CHECK(!cache.companion(beaconFrame));
+    cache.remember(response,parse(responseBytes),2); CHECK(cache.companion(beaconFrame));
+    for(uint8_t id:{2,3}) { changed=response; changed.bytes[21]=id; changed.timestampUs=uint64_t(id)*2000000; auto obs=parse(responseBytes); obs.bssid[5]=id; cache.remember(changed,obs,2); }
+    CHECK(!cache.companion(beaconFrame));
+    cache.clear(); CHECK(!cache.companion(beaconFrame));
+}
 void corruptionTests() {
     std::mt19937 random(0x4252434d); Observation observation;
     for(size_t iteration=0;iteration<50000;++iteration) {
@@ -711,7 +740,7 @@ void uiDisplayPowerTests() {
 int main(int argc,char** argv) {
     try {
         parserTests(); storeTests(); scannerTests(); exportTests(argc>1?argv[1]:nullptr);
-        detectionTests(argc>1?argv[1]:nullptr); uiTests(); uiCountryTests(); uiSortingTests(); uiFilterTests(); uiStateTests(); uiDisplayPowerTests(); corruptionTests();
+        detectionTests(argc>1?argv[1]:nullptr); contextTests(argc>1?argv[1]:nullptr); uiTests(); uiCountryTests(); uiSortingTests(); uiFilterTests(); uiStateTests(); uiDisplayPowerTests(); corruptionTests();
         std::cout << "PASS: " << checks << " checks; 50,000 deterministic corrupt frames\n";
     } catch(const std::exception& e) { std::cerr << "FAIL: " << e.what() << '\n'; return 1; }
 }

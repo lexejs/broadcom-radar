@@ -21,7 +21,7 @@
 #endif
 
 namespace radar {
-constexpr const char* kFirmwareVersion = "1.0.15";
+constexpr const char* kFirmwareVersion = "1.0.16";
 constexpr const char* kCountries[] = {"01", "PL", "US", "JP", "DE", "GB", "FR", "CA", "AU", "AT", "BE", "BG", "BR", "CH", "CN", "CY", "CZ", "DK", "EE", "ES", "FI", "GR", "HK", "HR", "HU", "IE", "IN", "IS", "IT", "KR", "LI", "LT", "LU", "LV", "MT", "MX", "NL", "NO", "NZ", "PT", "RO", "SE", "SI", "SK", "TW"};
 constexpr size_t kCountryCount = sizeof(kCountries) / sizeof(kCountries[0]);
 constexpr const char* kFirmwareVariant = RADAR_WPS_PROBE ?
@@ -81,7 +81,7 @@ struct AccessPoint {
 struct Frame {
     uint64_t timestampUs = 0;
     uint16_t length = 0;
-    int8_t rssi = -127;
+    int8_t rssi = 0; // Populated by RX; empty buffers stay zero-initialized in BSS.
     uint8_t channel = 0;
     uint8_t bytes[kMaxFrame]{};
 };

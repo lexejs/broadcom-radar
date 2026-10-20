@@ -8,7 +8,7 @@ Built for **M5Stack Cardputer ADV** and the **original Cardputer** (ESP32-S3), w
 
 **Published release 1.0.12** · [MIT license](LICENSE) · [All releases](https://github.com/lexejs/broadcom-radar/releases)
 
-Development source: **1.0.15**, not yet published as a release. The downloads below remain the published 1.0.12 images.
+Development source: **1.0.16**, not yet published as a release. The downloads below remain the published 1.0.12 images.
 
 [Download](#download-and-choose-a-firmware) · [Get started](#quick-start) · [Read the results](#meaning-of-results) · [Controls](#controls) · [FAQ](#frequently-asked-questions) · [Research](RESEARCH.md)
 
@@ -177,7 +177,7 @@ Find your saved files in **`/broadcom-radar/`** on microSD:
 
 | What you save | How | Files |
 | --- | --- | --- |
-| A Broadcom detection | Automatically, when eligible evidence is received | `brcm-NNN.json`, `.csv` and a PCAP containing one triggering advertisement |
+| A Broadcom detection | Automatically, when eligible evidence is received | `brcm-NNN.json`, `.csv` and a PCAP of the triggering advertisement (development 1.0.16 can add a cached counterpart) |
 | All stored networks, including filtered-out rows | Press **E** | `scan-NNN.json` and `.csv` |
 | Recent raw advertisements with that scan | Press **P** to enable buffering, then **E** | Also `scan-NNN.pcap`, containing up to the latest **16** advertisements |
 
@@ -190,7 +190,7 @@ Existing exports are preserved. An SD error keeps scanning usable; check the on-
 
 Broadcom detections are **saved automatically**, without pressing E or enabling P: `/broadcom-radar/brcm-001.json`, `.csv` and `.pcap` contain one detected BSSID and the raw advertisement that triggered that save. Capture briefly pauses during SD writes and then resumes. A later advertisement creates a new numbered archive only if it adds a Broadcom evidence bit or fills a previously empty WPS identity/UUID field. Repeated advertisements do not write to SD. Deduplication retains the latest 128 distinct saved BSSIDs in RAM, survives R and resets on reboot; older evicted entries can be saved again. An immediately recognizable Broadcom advertisement is archived even when the 128-AP display table is full.
 
-Automatic PCAP contains **one triggering advertisement**, independent of the manual 16-frame ring. The JSON/CSV identity is cumulative for APs in the table, so this one frame need not contain every previously observed field or evidence bit. JSON records `capture_reason: broadcom_detection` and `pcap_scope: triggering_advertisement`. All three files are written as `.part` first; JSON is published last as the completion marker. Errors leave partial files, keep capture usable and permit another attempt on a received Broadcom advertisement after five seconds. There is no pending-frame queue for detections seen while SD is unavailable.
+Published 1.0.12 automatic PCAP contains **one triggering advertisement**, independent of the manual 16-frame ring. Development 1.0.16 also includes a previously received counterpart (Beacon versus Probe Response) when available for the same BSSID and capture channel within 30 seconds. A fixed global cache holds two BSSIDs, using four frame buffers (about 9.3 KiB), rather than allocating per-AP raw buffers. A cleared live session invalidates the cache. The older counterpart precedes the triggering frame; JSON records `pcap_frames`, `triggering_frame_index` and `pcap_scope: triggering_advertisement_with_companion` when paired. Missing, stale, foreign or evicted counterparts leave a single-frame archive; later arrival alone does not force another write. The JSON/CSV identity is cumulative for APs in the table, so these one or two frames need not contain every previously observed field or evidence bit. Single-frame JSON records `capture_reason: broadcom_detection` and `pcap_scope: triggering_advertisement`. All three files are written as `.part` first; JSON is published last as the completion marker. Errors leave partial files, keep capture usable and permit another attempt on a received Broadcom advertisement after five seconds. There is no pending-frame queue for detections seen while SD is unavailable.
 
 **E** creates `/broadcom-radar/scan-001.json` and `.csv`, then advances to an unused number. Existing final files and interrupted `.part` files are never overwritten. Writes use a 512-byte buffer and one AP or PCAP record per loop iteration. Each completed file is renamed from `.part`; SD errors keep partial files and leave capture usable. A JSON file may finish before a later CSV/PCAP write fails, so a complete set is indicated by all requested final filenames plus the `Saved` message.
 

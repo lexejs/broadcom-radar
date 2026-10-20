@@ -9,7 +9,7 @@ public:
 };
 bool writeJsonHeader(Sink& sink, const ScanStats& stats, const char* hardware,
                      const char* country, const PcapRing& ring);
-bool writeDetectionJsonHeader(Sink& sink, const ScanStats& stats, const char* hardware, const char* country);
+bool writeDetectionJsonHeader(Sink& sink, const ScanStats& stats, const char* hardware, const char* country, bool companion = false);
 bool writeJsonAp(Sink& sink, const AccessPoint& ap, bool first);
 bool writeJsonFooter(Sink& sink);
 bool writeCsvHeader(Sink& sink);

@@ -59,6 +59,22 @@ assert frame[16:22].hex() == ap["bssid"].replace(":", "").lower()
 assert b"\xdd\x09\x00\x10\x18\x02" in frame
 print("PASS: automatic BRCM JSON/CSV and matching single-frame PCAP with manual capture disabled")
 
+context = json.loads((root / "context-001.json").read_text())
+assert context["pcap_frames"] == 2 and context["triggering_frame_index"] == 1
+assert context["pcap_scope"] == "triggering_advertisement_with_companion"
+data = (root / "context-001.pcap").read_bytes()
+offset = 24
+for subtype, timestamp in [(0x50, 1), (0x80, 2)]:
+    seconds, micros, captured, original = struct.unpack_from("<IIII", data, offset)
+    offset += 16
+    assert seconds == timestamp and micros == 0 and captured == original
+    frame = data[offset:offset + captured]
+    assert frame[0] == subtype
+    assert frame[16:22].hex() == context["access_points"][0]["bssid"].replace(":", "").lower()
+    offset += captured
+assert offset == len(data)
+print("PASS: paired same-BSSID Probe Response/Beacon PCAP, capture order and triggering frame index")
+
 report = json.loads((root / "test-001.json").read_text())
 assert report["mode"] == "experimental-active-wps"
 assert report["implementation_candidate"] == "HOSTAPD_LIKE"

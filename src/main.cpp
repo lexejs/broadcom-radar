@@ -12,6 +12,7 @@ namespace {
 radar::WifiScanner scanner;
 radar::AccessPointStore store;
 radar::PcapRing pcap;
+radar::AdvertisementCache context;
 radar::Exporter exporter;
 radar::DisplayUi ui;
 radar::Frame frame;
@@ -80,12 +81,13 @@ void loop() {
             if (observation.malformed) ++malformed;
             const auto* ap = store.observe(observation);
             auto stats = scanner.stats();
+            context.remember(frame, observation, stats.startedUs);
             if (exporter.needsDetection(observation, ap, stats.nowUs)) {
                 const bool running = stats.running;
                 if (running && !scanner.setRunning(false)) continue;
                 stats = scanner.stats();
                 stats.rejected = rejected; stats.malformed = malformed; stats.storeDrops = store.dropped(); stats.storeReplacements = store.replacements();
-                exporter.saveDetection(observation, ap, frame, stats, hardware);
+                exporter.saveDetection(observation, ap, frame, stats, hardware, context.companion(frame));
                 if (running) scanner.setRunning(true);
                 ui.notify(exporter.message());
             }
