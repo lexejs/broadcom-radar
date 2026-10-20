@@ -4,7 +4,7 @@ See Broadcom and WPS details from nearby **2.4 GHz Wi-Fi networks**, right on yo
 
 Built for **M5Stack Cardputer ADV** and the **original Cardputer** (ESP32-S3), with installation through your existing **M5Launcher**.
 
-Advertised fingerprints are evidence, not a verdict on vulnerability, patch status or safety.
+> **Authorized use only:** Test networks you own or have explicit permission to assess. Radar helps with security inventory and planning vendor firmware updates. Advertised fingerprints are evidence, not a verdict on vulnerability, patch status or safety.
 
 **Version 1.0.12** · [MIT license](LICENSE) · [All releases](https://github.com/lexejs/broadcom-radar/releases)
 
@@ -19,7 +19,7 @@ Advertised fingerprints are evidence, not a verdict on vulnerability, patch stat
 | **Cardputer ADV** (Stamp-S3A) | [ADV firmware 1.0.12 (.bin)](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.12/BRCM-RDR-1.0.12.bin) | [Size and SHA-256](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.12/BRCM-RDR-1.0.12.bin.json) |
 | **Original Cardputer** (Stamp-S3) | [Original firmware 1.0.12 (.bin)](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.12/BRCM-RDR-S3-1.0.12.bin) | [Size and SHA-256](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.12/BRCM-RDR-S3-1.0.12.bin.json) |
 
-These builds listen to existing Wi-Fi advertisements and do not start active WPS tests. Original Cardputer builds pass automated checks; testing on that physical board is still pending. Optional `-T`, `-C` and `-F` research images are explained [below](#experimental-on-device-wps-tests).
+These builds listen to existing Wi-Fi advertisements and do not start active WPS tests. Both builds pass automated checks; on-device operation of 1.0.12 remains unverified on either board. Optional `-T`, `-C` and `-F` research images are explained [below](#experimental-on-device-wps-tests).
 
 ## Screen previews
 
@@ -199,6 +199,10 @@ An absent SD card does not stop scanning. Pressing E or receiving another eligib
 ### Is this a vulnerability scanner?
 
 It is a fingerprint and evidence viewer. A Broadcom or WPS observation does not tell you whether the router is vulnerable or has been patched. The [exact signature rules](RESEARCH.md#exact-passive-signatures) explain what each finding supports.
+
+### Does Radar update or patch a router?
+
+No. Radar collects advertised fingerprints to help you decide what to check. Review the router vendor's advisories and installed firmware version, then apply updates using the vendor's official procedure. Radar does not install updates or verify that a vulnerability has been fixed; a changed or missing fingerprint is not proof of remediation.
 
 ### Why is the list empty?
 
