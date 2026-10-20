@@ -6,6 +6,7 @@ public:
     virtual ~IndicatorHardware() = default;
     virtual void rgb(uint8_t red, uint8_t green, uint8_t blue) = 0;
     virtual bool tone() = 0;
+    virtual bool service(uint32_t nowMs) { (void)nowMs; return true; }
     virtual void silence() = 0;
 };
 class FieldIndicators {

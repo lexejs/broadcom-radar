@@ -44,6 +44,10 @@ void FieldIndicators::tick(const ScanStats& stats, const AccessPoint* selected, 
         if (tracking_) { hardware_.silence(); tracking_ = false; }
         return;
     }
+    if (!hardware_.service(now)) {
+        hardware_.silence(); sound_ = tracking_ = false; soundError_ = true;
+        return;
+    }
     int signal = selected->info.rssi;
     if (signal < -95) signal = -95;
     if (signal > -35) signal = -35;

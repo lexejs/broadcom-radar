@@ -21,6 +21,7 @@ bool CardputerIndicators::codec(void*, bool enabled) {
     return true;
 }
 bool CardputerIndicators::tone() {
+    if (remaining_) return true; // Keep one bounded pending click, without restarting it.
     if (!audio_) {
         if (!codec(nullptr, true)) { codec(nullptr, false); return false; }
         i2s_config_t config{};
@@ -44,11 +45,23 @@ bool CardputerIndicators::tone() {
             click_[i * 2] = click_[i * 2 + 1] = value;
         }
     }
+    remaining_ = sizeof(click_); timing_ = false;
+    return true;
+}
+bool CardputerIndicators::service(uint32_t now) {
+    if (!remaining_) return true;
+    if (!timing_) { progressAt_ = now; timing_ = true; }
     size_t written = 0;
-    // Queue once without waiting for DMA or another task. A stalled output is an error.
-    return i2s_write(I2S_NUM_1, click_, sizeof(click_), &written, 0) == ESP_OK && written == sizeof(click_);
+    const auto* bytes = reinterpret_cast<const uint8_t*>(click_) + sizeof(click_) - remaining_;
+    // A new DMA queue may accept zero bytes. Keep the suffix for the next loop, with no wait.
+    if (i2s_write(I2S_NUM_1, bytes, remaining_, &written, 0) != ESP_OK ||
+        written > remaining_ || written % (2 * sizeof(int16_t))) return false;
+    remaining_ -= written;
+    if (written) progressAt_ = now;
+    return !remaining_ || now - progressAt_ < 100;
 }
 void CardputerIndicators::silence() {
+    remaining_ = 0; timing_ = false;
     if (!audio_) return;
     // No playback task to join, pending tone to drain, or retry loop on the UI thread.
     i2s_stop(I2S_NUM_1); i2s_driver_uninstall(I2S_NUM_1); codec(nullptr, false); audio_ = false;
