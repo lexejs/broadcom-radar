@@ -63,3 +63,10 @@ struct FakeKeyboard {
 struct FakePower { int getBatteryLevel() { return 82; } };
 struct FakeCardputer { FakeDisplay Display; FakeKeyboard Keyboard; FakePower Power; };
 inline FakeCardputer M5Cardputer;
+
+struct FakeI2c {
+    bool fail=false; unsigned writes=0; uint8_t lastRegister=0,lastValue=0;
+    bool writeRegister8(uint8_t,uint8_t reg,uint8_t value,uint32_t) { ++writes;lastRegister=reg;lastValue=value;return !fail; }
+};
+struct FakeM5 { FakeI2c In_I2C; };
+inline FakeM5 M5;

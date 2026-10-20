@@ -32,6 +32,13 @@ fi
   src/AccessPointStore.cpp src/Serialization.cpp src/GpsTracker.cpp src/WifiScanner.cpp src/Export.cpp \
   src/DisplayUi.cpp src/FieldIndicators.cpp src/WpsProbe.cpp -o .test-build/test-gps
 ASAN_OPTIONS=detect_leaks=0 .test-build/test-gps .test-build
+for audio_board in 0 1; do
+  "$compiler" -std=c++17 -g -O1 -Wall -Wextra -Werror \
+    -fsanitize=address,undefined -fno-omit-frame-pointer \
+    -DRADAR_ADV="$audio_board" -Iinclude -Itest/stubs \
+    test/test_audio.cpp src/CardputerIndicators.cpp src/FieldIndicators.cpp -o .test-build/test-audio
+  ASAN_OPTIONS=detect_leaks=0 .test-build/test-audio
+done
 python3 scripts/check_passive.py
 "$compiler" -std=c++17 -g -O1 -Wall -Wextra -Werror \
   -fsanitize=address,undefined -fno-omit-frame-pointer \

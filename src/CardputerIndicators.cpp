@@ -1,6 +1,7 @@
 #include "CardputerIndicators.h"
 #include <M5Cardputer.h>
 #include <esp32-hal-rgb-led.h>
+#include <driver/i2s.h>
 namespace radar {
 void CardputerIndicators::rgb(uint8_t red, uint8_t green, uint8_t blue) {
     // GPIO38 also powers the ADV backlight. Never change it for an alert.
@@ -20,21 +21,36 @@ bool CardputerIndicators::codec(void*, bool enabled) {
     return true;
 }
 bool CardputerIndicators::tone() {
-    auto& speaker = M5Cardputer.Speaker;
     if (!audio_) {
-        auto config = speaker.config();
-        config.pin_bck = 41; config.pin_ws = 43; config.pin_data_out = 42;
-        config.i2s_port = I2S_NUM_1; config.magnification = 16;
-        config.stereo = false;
-        speaker.config(config); speaker.setVolume(32);
         if (!codec(nullptr, true)) { codec(nullptr, false); return false; }
-        if (!speaker.begin()) { speaker.end(); codec(nullptr, false); return false; }
+        i2s_config_t config{};
+        config.mode = i2s_mode_t(I2S_MODE_MASTER | I2S_MODE_TX);
+        config.sample_rate = 48000; config.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT;
+        config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
+        config.communication_format = I2S_COMM_FORMAT_STAND_I2S;
+        config.dma_buf_count = 4; config.dma_buf_len = 256; config.tx_desc_auto_clear = true;
+        if (i2s_driver_install(I2S_NUM_1, &config, 0, nullptr) != ESP_OK) { codec(nullptr, false); return false; }
         audio_ = true;
+        i2s_pin_config_t pins{};
+        pins.mck_io_num = I2S_PIN_NO_CHANGE; pins.bck_io_num = 41; pins.ws_io_num = 43;
+        pins.data_out_num = 42; pins.data_in_num = I2S_PIN_NO_CHANGE;
+        if (i2s_set_pin(I2S_NUM_1, &pins) != ESP_OK) { silence(); return false; }
+        // 1200 Hz, 20 ms, quiet triangle with a 1 ms fade at each end.
+        for (size_t i = 0; i < kSamples; ++i) {
+            const int phase = i % 40;
+            int value = 80 * (phase < 10 ? phase : phase < 30 ? 20 - phase : phase - 40);
+            if (i < 48) value = value * int(i) / 48;
+            if (i >= kSamples - 48) value = value * int(kSamples - 1 - i) / 48;
+            click_[i * 2] = click_[i * 2 + 1] = value;
+        }
     }
-    return speaker.tone(1200, 20);
+    size_t written = 0;
+    // Queue once without waiting for DMA or another task. A stalled output is an error.
+    return i2s_write(I2S_NUM_1, click_, sizeof(click_), &written, 0) == ESP_OK && written == sizeof(click_);
 }
 void CardputerIndicators::silence() {
     if (!audio_) return;
-    M5Cardputer.Speaker.stop(); M5Cardputer.Speaker.end(); codec(nullptr, false); audio_ = false;
+    // No playback task to join, pending tone to drain, or retry loop on the UI thread.
+    i2s_stop(I2S_NUM_1); i2s_driver_uninstall(I2S_NUM_1); codec(nullptr, false); audio_ = false;
 }
 }
