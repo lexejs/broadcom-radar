@@ -12,9 +12,11 @@ Built for **M5Stack Cardputer ADV** and the **original Cardputer** (ESP32-S3), w
 
 ## Download and choose a firmware
 
+**Before downloading:** your Cardputer must already run [M5Launcher](https://github.com/bmorcelli/Launcher/wiki/Explaining-the-project). These published images use **Poland (`PL`), channels 1-13**. For another operating country, follow the [country configuration](#radio-and-memory-decisions) before building. An **app slot** is reserved internal flash space for one application; check its actual size in Launcher.
+
 **New here? Choose the passive scanner for your device:**
 
-| Your device | Recommended download | File verification |
+| Your device | Recommended download | Manifest (size and SHA-256) |
 | --- | --- | --- |
 | **Cardputer ADV** (Stamp-S3A) | [ADV firmware 1.0.12 (.bin)](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.12/BRCM-RDR-1.0.12.bin) | [Size and SHA-256](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.12/BRCM-RDR-1.0.12.bin.json) |
 | **Original Cardputer** (Stamp-S3) | [Original firmware 1.0.12 (.bin)](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.12/BRCM-RDR-S3-1.0.12.bin) | [Size and SHA-256](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.12/BRCM-RDR-S3-1.0.12.bin.json) |
@@ -46,9 +48,10 @@ The network list puts Broadcom observations first. Open a row to see which adver
 
 1. **Choose your device.** Download its `.bin` and matching manifest from the table above. Compare the file size and SHA-256 with the manifest.
 2. **Install through M5Launcher.** Copy the `.bin` to microSD and install it into a compatible app slot. Keep Launcher, your other apps and their data. Read the [installation steps](#installation-through-the-existing-m5launcher) before selecting a slot.
-3. **Take your first look.** Start Radar and wait through several channel sweeps. `RUN` and a changing channel indicate hopping mode. Select a network with the arrows and press **Enter**. **H** opens help; **E** saves the current scan.
+3. **Take your first look.** Start Radar and wait through several channel sweeps. `RUN` and a changing channel show that scanning is active. Find your own Wi-Fi name (**SSID**). If names repeat, compare the **BSSID**, the identifier of that individual access point, with the 2.4 GHz radio shown in your router administration interface. Use **`;` up / `.` down** and press **Enter** for SUMMARY; press **Enter** again for EVIDENCE. **Backspace** returns to the list and **H** opens help.
+4. **Save your observations.** Press **E**, wait for `Saved scan-NNN`, then open `/broadcom-radar/scan-NNN.csv` on microSD and find the BSSID from SUMMARY. This saves all stored networks, including rows hidden by a filter.
 
-microSD is needed to save files, but scanning still works without a card. The ready-made builds use the **PL country policy, channels 1-13**. Rebuild with the correct operating country before using them elsewhere.
+microSD is needed to save files, but scanning still works without a card. **WPS** means Wi-Fi Protected Setup, a router setup feature; Radar records whether its advertisement was observed. `Maker` and `Model` are WPS-advertised identity fields and can contain generic defaults such as `BroadcomAP`. Use your router administration interface or manufacturer label for its retail model, hardware revision and installed firmware version. The rightmost number in each list row is signal strength in dBm.
 
 ## Installation through the existing M5Launcher
 
@@ -114,9 +117,12 @@ The labels describe **what Radar has observed**:
 | You want to... | Press |
 | --- | --- |
 | Choose a network and inspect it | **Arrows**, then **Enter** |
-| Open help or return to the previous screen | **H** / **Esc** or **Backspace** |
+| Open help | **H** |
+| Return to the previous screen | **Esc** or **Backspace** |
 | Pause or resume scanning | **S** |
-| Save the current scan | **E** |
+| Save all stored networks | **E** |
+| Buffer recent advertisements for the next scan export | **P**, then **E** |
+| Clear live data while keeping SD files | **R** twice within 3 seconds |
 | Show all networks, WPS candidates or Broadcom+WPS candidates | **F**: `ALL` → `WPS` → `B+W` |
 | Adjust the screen or turn it off | **B** for settings; **L** to blank it |
 
@@ -165,11 +171,11 @@ Find your saved files in **`/broadcom-radar/`** on microSD:
 
 | What you save | How | Files |
 | --- | --- | --- |
-| A Broadcom detection | Automatically, when eligible evidence is received | `brcm-NNN.json`, `.csv` and a PCAP of its triggering advertisement |
-| The current scan | Press **E** | `scan-NNN.json` and `.csv` |
+| A Broadcom detection | Automatically, when eligible evidence is received | `brcm-NNN.json`, `.csv` and a PCAP containing one triggering advertisement |
+| All stored networks, including filtered-out rows | Press **E** | `scan-NNN.json` and `.csv` |
 | Recent raw advertisements with that scan | Press **P** to enable buffering, then **E** | Also `scan-NNN.pcap`, containing up to the latest **16** advertisements |
 
-JSON contains detailed evidence; CSV is convenient for a spreadsheet. PCAP holds raw frames for packet tools such as Wireshark. It is a bounded snapshot, not a continuous recording. Automatic Broadcom PCAP saving works independently of P.
+JSON contains detailed evidence; CSV is convenient for a spreadsheet. PCAP holds raw frames for packet tools such as Wireshark. It is a bounded snapshot, not a continuous recording. The manual PCAP ring contains the latest 16 advertisements across all received networks; the selected BSSID may be absent. Automatic Broadcom PCAP saving works independently of P.
 
 Existing exports are preserved. An SD error keeps scanning usable; check the on-screen save status before removing the card.
 
@@ -182,7 +188,7 @@ Automatic PCAP contains **one triggering advertisement**, independent of the man
 
 **E** creates `/broadcom-radar/scan-001.json` and `.csv`, then advances to an unused number. Existing final files and interrupted `.part` files are never overwritten. Writes use a 512-byte buffer and one AP or PCAP record per loop iteration. Each completed file is renamed from `.part`; SD errors keep partial files and leave capture usable. A JSON file may finish before a later CSV/PCAP write fails, so a complete set is indicated by all requested final filenames plus the `Saved` message.
 
-JSON includes schema/firmware/hardware, `passive-only`, monotonic timestamps, country, channel mode, channels listened to, receive/drop/malformed counters, bounds, limitations and all AP records. AP records contain BSSID, raw SSID hex, display string, capability flags, WPS fields/UUIDs, individual evidence with source descriptions, status, latest/maximum RSSI, observed channels and advertisement counts.
+JSON includes schema/firmware/hardware, `passive-only`, monotonic timestamps, country, channel mode, channels listened to, receive/drop/malformed counters, bounds, limitations and all AP records. AP records contain BSSID, raw SSID hex, display string, capability flags, WPS fields/UUIDs, individual evidence with source descriptions, status, latest/maximum RSSI, observed channels and advertisement counts. In scan/detection JSON, `mode: passive-only` describes the observations in that artifact, not the identity of the running firmware or all radio activity during the session. For reproducible research, retain the installed image name and its matching manifest alongside any separate experimental test reports.
 
 JSON strings preserve byte values with `\u00XX` escapes; they are not a UTF-8 interpretation of binary SSIDs. `ssid_hex` is authoritative for original bytes. CSV escapes binary bytes as `\xNN`, quotes fields and protects formula-leading values with an apostrophe. SSID hex remains unchanged. Vendor IEs are summarized by prefix/payload length; enable PCAP if the full received IE bytes are needed.
 
@@ -203,6 +209,8 @@ It is a fingerprint and evidence viewer. A Broadcom or WPS observation does not 
 ### Does Radar update or patch a router?
 
 No. Radar collects advertised fingerprints to help you decide what to check. Review the router vendor's advisories and installed firmware version, then apply updates using the vendor's official procedure. Radar does not install updates or verify that a vulnerability has been fixed; a changed or missing fingerprint is not proof of remediation.
+
+**Start a fresh observation after changing your router.** Findings accumulate until you clear live data or restart Radar. A fresh `Last` value only dates the latest received advertisement; an earlier WPS/signature finding can remain. Save the old scan with **E** and wait for completion. After the router change, press **R twice** from the list, collect a new scan and save it with **E**. Automatic archive deduplication survives R, so use the manual export for this comparison. Check the installed firmware version and vendor advisory separately.
 
 ### Why is the list empty?
 
