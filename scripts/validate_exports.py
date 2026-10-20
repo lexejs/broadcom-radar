@@ -15,6 +15,8 @@ assert len(aps) == 3 and len({ap["bssid"] for ap in aps}) == 3
 assert aps[0]["status"] == "BROADCOM_SIGNATURE"
 assert aps[1]["wps"]["uuid_r"] == "000102030405060708090a0b0c0d0ebb"
 assert {item["name"] for item in aps[0]["evidence"]} == {"broadcom_proprietary_ie"}
+assert aps[0]["metadata_sources"] == 1
+assert aps[0]["evidence"][0]["contributing_frame_types"] == ["beacon"]
 assert aps[0]["wps"]["manufacturer"] == "Example Vendor"
 assert aps[0]["ssid_hex"] == "00ff222c0a" and aps[0]["ssid"] == '\x00\xff",\n'
 assert aps[2]["ssid_hex"] == "3d312b31"

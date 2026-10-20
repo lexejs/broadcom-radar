@@ -24,6 +24,9 @@ const char* ssidText(const Observation& ap, char* rendered, size_t capacity) {
     if (hiddenSsid(ap.ssid)) return "<hidden>";
     renderBytes(ap.ssid.data, ap.ssid.length, rendered, capacity); return rendered;
 }
+const char* sourceLabel(uint8_t sources) {
+    return sources == 3 ? "B+P" : sources == 1 ? "B" : sources == 2 ? "P" : "--";
+}
 // renderBytes emits only ASCII or complete four-character escape tokens.
 size_t segmentLength(const char* text, size_t columns) {
     size_t size = 0;
@@ -140,23 +143,23 @@ void DisplayUi::detail(const AccessPoint& ap, const ScanStats& stats) {
     if (page_ == 0) {
         line(3, "%s", mac);
         line(4, "Signal:%d Max:%d dBm", a.rssi, ap.maxRssi);
-        line(5, "Channel:%u WPS:%s", a.channel, wpsStateName(wpsState(ap)));
+        line(5, "Channel:%u WPS:%s", a.channel, wpsState(ap) == WpsState::No ? "not seen" : wpsStateName(wpsState(ap)));
         value(6, "Maker", a.wps.manufacturer, field_ == 1); value(7, "Model", a.wps.modelName, field_ == 2);
         line(8, "%s Last:%llus", kDetectionBadges[detectionGroup(ap)],
              (unsigned long long)((stats.nowUs - ap.lastSeenUs) / 1000000));
     } else if (page_ == 1) {
         line(2, "Observed: %s", kDetectionBadges[detectionGroup(ap)]);
         if (a.evidence) {
-            line(3, "Broadcom IE: %s", a.evidence & ProprietaryIe ? "YES" : "--");
-            line(4, "Fixed UUID: %s", a.evidence & FixedUuid ? "YES" : "--");
-            line(5, "Defaults: %s", a.evidence & IdentityDefaults ? "2+ fields match" : "--");
+            line(3, "Broadcom IE: %s [%s]", a.evidence & ProprietaryIe ? "YES" : "--", sourceLabel(evidenceFrameSources(ap, ProprietaryIe)));
+            line(4, "Fixed UUID: %s [%s]", a.evidence & FixedUuid ? "YES" : "--", sourceLabel(evidenceFrameSources(ap, FixedUuid)));
+            line(5, "Defaults: %s [%s]", a.evidence & IdentityDefaults ? "2+ fields" : "--", sourceLabel(a.evidence & IdentityDefaults ? evidenceFrameSources(ap, IdentityDefaults) : 0));
         } else if (!ap.completeAdvertisements) {
             line(3, "Incomplete advertisement"); line(4, "Malformed IE or WPS data");
         } else {
             line(3, a.wpsAdvertised ? "WPS seen, no Broadcom ID" : "No signature observed");
             line(4, "Missing ID != safe");
         }
-        line(6, "Passive signatures only"); line(7, "No vulnerability proof");
+        line(6, "Observed this session"); line(7, "No vulnerability proof");
         line(8, "AP patch status unknown");
     } else if (page_ == 2) {
         value(2, "Maker", a.wps.manufacturer, field_ == 1); value(3, "Model", a.wps.modelName, field_ == 2);
@@ -180,7 +183,7 @@ void DisplayUi::detail(const AccessPoint& ap, const ScanStats& stats) {
         line(5, "Valid:%u Bad:%u", ap.completeAdvertisements, ap.malformedAdvertisements);
         line(6, "Last seen: %llus ago", (unsigned long long)((stats.nowUs - ap.lastSeenUs) / 1000000));
         line(7, "Capture: %s", stats.running ? "running" : "paused");
-        line(8, "Updates stop while paused");
+        line(8, "Valid sources: %s", sourceLabel(ap.metadataSources));
     } else {
         const size_t start = (page_ - 5) * 4;
         line(2, "Stored: %u of max %u IEs", a.vendorCount, unsigned(sizeof(a.vendors) / sizeof(a.vendors[0])));
@@ -236,7 +239,7 @@ void DisplayUi::help(const ScanStats& s, const PcapRing& ring) {
         line(7, "O:sort R twice:clear");
     } else if (helpPage_ == 1) {
         line(1, "ALL: all stored networks"); line(2, "WPS: test-ready APs");
-        line(3, "B+W: BRCM + test-ready"); line(4, "BRCM: signature observed");
+        line(3, "B+W: BRCM + test-ready"); line(4, "B/P: Beacon/Probe Response");
         line(5, "NONE: no signature seen"); line(6, "WAIT: incomplete AP data");
         line(7, "Hidden rows stay in export");
     } else if (helpPage_ == 2) {

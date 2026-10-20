@@ -106,6 +106,7 @@ bool Exporter::saveDetection(const Observation& observation, const AccessPoint* 
     if (!aggregate) {
         single.info = observation; single.firstSeenUs = single.lastSeenUs = observation.seenUs;
         single.advertisements = single.completeAdvertisements = 1; single.maxRssi = observation.rssi;
+        recordAdvertisementSource(single, observation);
         single.beacons = observation.subtype == 8; single.probeResponses = observation.subtype == 5;
         if (observation.captureChannel >= 1 && observation.captureChannel <= 14)
             single.captureChannels = 1 << (observation.captureChannel - 1);

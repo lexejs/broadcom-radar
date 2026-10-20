@@ -98,11 +98,19 @@ bool writeJsonAp(Sink& sink, const AccessPoint& ap, bool first) {
     for (uint8_t bit = 1; bit <= 4; bit <<= 1) if (a.evidence & bit) {
         if (!evidenceFirst) w.raw(",");
         evidenceFirst = false;
-        w.raw("{\"name\":"); w.str(evidenceName(bit)); w.raw(",\"source\":"); w.str(evidenceSource(bit)); w.raw("}");
+        w.raw("{\"name\":"); w.str(evidenceName(bit)); w.raw(",\"source\":"); w.str(evidenceSource(bit));
+        w.raw(",\"contributing_frame_types\":[");
+        const auto sources = evidenceFrameSources(ap, bit);
+        if (sources & 1) w.str("beacon");
+        if (sources == 3) w.raw(",");
+        if (sources & 2) w.str("probe_response");
+        w.raw("]}");
     }
     w.fmt("],\"first_seen_us\":%llu,\"last_seen_us\":%llu,\"advertisements\":%u,\"complete_advertisements\":%u,\"malformed_advertisements\":%u,\"beacons\":%u,\"probe_responses\":%u,",
           (unsigned long long)ap.firstSeenUs, (unsigned long long)ap.lastSeenUs, ap.advertisements, ap.completeAdvertisements, ap.malformedAdvertisements, ap.beacons, ap.probeResponses);
     w.raw("\"capture_channels\":"); channels(w, ap.captureChannels);
+    w.fmt(",\"metadata_sources\":%u,\"wps_sources\":%u,\"beacon_default_fields\":%u,\"probe_response_default_fields\":%u",
+          ap.metadataSources, ap.wpsSources, ap.beaconDefaults, ap.responseDefaults);
     w.raw(",\"ie_ids\":["); bool idFirst = true;
     for (unsigned i = 0; i < 256; ++i) if (a.ieIds[i >> 3] & (1 << (i & 7))) { w.fmt("%s%u", idFirst ? "" : ",", i); idFirst = false; }
     w.raw("],\"vendor_ies\":[");

@@ -119,6 +119,15 @@ void storeTests() {
     CHECK(store.at(0).info.evidence == 0);
     Data two; tlv(two, 0x1024, text("1234")); auto second = beacon(); wps(second, two); store.observe(parse(second));
     CHECK(store.at(0).info.evidence == IdentityDefaults && store.at(0).info.wps.manufacturer.length == 8);
+    CHECK(store.at(0).metadataSources == 1 && store.at(0).wpsSources == 1);
+    store.clear(); store.observe(parse(first)); second[0]=0x50; store.observe(parse(second));
+    CHECK(store.at(0).info.evidence == IdentityDefaults && store.at(0).metadataSources == 3);
+    CHECK(store.at(0).wpsSources == 3 && evidenceFrameSources(store.at(0),IdentityDefaults) == 3);
+    CHECK(store.at(0).beaconDefaults == 1 && store.at(0).responseDefaults == 4);
+    auto malformedSource=beacon(); proprietary(malformedSource); malformedSource.push_back(221);
+    store.observe(parse(malformedSource)); CHECK(!evidenceFrameSources(store.at(0),ProprietaryIe));
+    StringSink provenance; CHECK(writeJsonAp(provenance,store.at(0),true));
+    CHECK(provenance.value.find("\"contributing_frame_types\":[\"beacon\",\"probe_response\"]")!=std::string::npos);
     store.clear(); auto bad = beacon(Data(33,'x')); store.observe(parse(bad)); store.observe(parse(beacon({})));
     CHECK(store.at(0).info.ssid.length == 0 && !store.at(0).info.malformed);
     store.clear();

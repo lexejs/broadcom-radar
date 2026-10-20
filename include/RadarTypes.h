@@ -21,7 +21,7 @@
 #endif
 
 namespace radar {
-constexpr const char* kFirmwareVersion = "1.0.18";
+constexpr const char* kFirmwareVersion = "1.0.19";
 constexpr const char* kCountries[] = {"01", "PL", "US", "JP", "DE", "GB", "FR", "CA", "AU", "AT", "BE", "BG", "BR", "CH", "CN", "CY", "CZ", "DK", "EE", "ES", "FI", "GR", "HK", "HR", "HU", "IE", "IN", "IS", "IT", "KR", "LI", "LT", "LU", "LV", "MT", "MX", "NL", "NO", "NZ", "PT", "RO", "SE", "SI", "SK", "TW"};
 constexpr size_t kCountryCount = sizeof(kCountries) / sizeof(kCountries[0]);
 constexpr const char* kFirmwareVariant = RADAR_WPS_PROBE ?
@@ -71,6 +71,8 @@ struct Observation {
 };
 struct AccessPoint {
     Observation info;
+    uint8_t metadataSources = 0, wpsSources = 0;
+    uint8_t beaconEvidence = 0, responseEvidence = 0, beaconDefaults = 0, responseDefaults = 0;
     uint32_t discoveryOrder = 0;
     uint64_t firstSeenUs = 0, lastSeenUs = 0;
     uint32_t advertisements = 0, completeAdvertisements = 0, malformedAdvertisements = 0;

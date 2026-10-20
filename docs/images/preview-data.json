@@ -1,11 +1,11 @@
 {
-  "firmware": "1.0.12",
+  "firmware": "1.0.19",
   "screens": [
     {
       "file": "network-list.png",
       "rows": [
         {
-          "text": "BRCM-RDR 1.0.12 P ALL",
+          "text": "BRCM-RDR 1.0.19 P ALL",
           "foreground": 1,
           "background": 3
         },
@@ -120,22 +120,22 @@
           "background": 0
         },
         {
-          "text": "Broadcom IE: YES",
+          "text": "Broadcom IE: YES [B]",
           "foreground": 1,
           "background": 0
         },
         {
-          "text": "Fixed UUID: YES",
+          "text": "Fixed UUID: YES [B]",
           "foreground": 1,
           "background": 0
         },
         {
-          "text": "Defaults: 2+ fields match",
+          "text": "Defaults: 2+ fields [B]",
           "foreground": 1,
           "background": 0
         },
         {
-          "text": "Passive signatures only",
+          "text": "Observed this session",
           "foreground": 1,
           "background": 0
         },

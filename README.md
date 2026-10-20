@@ -8,7 +8,7 @@ Built for **M5Stack Cardputer ADV** and the **original Cardputer** (ESP32-S3), w
 
 **Published release 1.0.12** · [MIT license](LICENSE) · [All releases](https://github.com/lexejs/broadcom-radar/releases)
 
-Development source: **1.0.18**, not yet published as a release. The downloads below remain the published 1.0.12 images.
+Development source: **1.0.19**, not yet published as a release. The downloads below remain the published 1.0.12 images.
 
 [Download](#download-and-choose-a-firmware) · [Get started](#quick-start) · [Read the results](#meaning-of-results) · [Controls](#controls) · [FAQ](#frequently-asked-questions) · [Research](RESEARCH.md)
 
@@ -34,7 +34,7 @@ The network list puts Broadcom observations first. Open a row to see which adver
   <img src="docs/images/detection-evidence.png" width="360" alt="Evidence page showing the three Broadcom signature rules for a synthetic network">
 </p>
 
-*Rendered from the production UI with synthetic example networks. These are not device photos or evidence of hardware validation.*
+*Rendered from the production UI with synthetic example networks. Previews show the development version; published downloads can differ. These are not device photos or evidence of hardware validation.*
 
 <details>
 <summary>More screens: network details and display settings</summary>
@@ -111,6 +111,8 @@ The labels describe **what Radar has observed**:
 | **WPS** | WPS was observed without a Broadcom signature. |
 | **NONE** | A complete advertisement was read without a characteristic signature. |
 | **WAIT** | The available advertisement data is incomplete or malformed. |
+
+Development 1.0.19 marks contributing frame types on EVIDENCE: **B** is Beacon, **P** is Probe Response and **B+P** means both contributed. The ACTIVITY page separately counts received frame types and identifies valid metadata sources. `WPS:not seen` means no WPS advertisement was observed, not that the router has WPS disabled. Findings accumulate within the session.
 
 **A fingerprint does not establish vulnerability, patch status or safety.** `NONE` and `WAIT` do not mean safe. Press **Enter** to inspect the evidence behind a result.
 
@@ -194,7 +196,7 @@ Published 1.0.12 automatic PCAP contains **one triggering advertisement**, indep
 
 **E** creates `/broadcom-radar/scan-001.json` and `.csv`, then advances to an unused number. Existing final files and interrupted `.part` files are never overwritten. Writes use a 512-byte buffer and one AP or PCAP record per loop iteration. Each completed file is renamed from `.part`; SD errors keep partial files and leave capture usable. A JSON file may finish before a later CSV/PCAP write fails, so a complete set is indicated by all requested final filenames plus the `Saved` message.
 
-JSON includes schema/firmware/hardware, `passive-only`, monotonic timestamps, country, channel mode, channels listened to, receive/drop/malformed counters, bounds, limitations and all AP records. AP records contain BSSID, raw SSID hex, display string, capability flags, WPS fields/UUIDs, individual evidence with source descriptions, status, latest/maximum RSSI, observed channels and advertisement counts. In scan/detection JSON, `mode: passive-only` describes the observations in that artifact, not the identity of the running firmware or all radio activity during the session. For reproducible research, retain the installed image name and its matching manifest alongside any separate experimental test reports.
+JSON includes schema/firmware/hardware, `passive-only`, monotonic timestamps, country, channel mode, channels listened to, receive/drop/malformed counters, bounds, limitations and all AP records. AP records contain BSSID, raw SSID hex, display string, capability flags, WPS fields/UUIDs, individual evidence with source descriptions, status, latest/maximum RSSI, observed channels and advertisement counts. Development 1.0.19 adds `contributing_frame_types` per evidence item; `metadata_sources` and `wps_sources` use bit 1 for Beacon and bit 2 for Probe Response. Default-identity field masks are retained separately by frame type, so combined evidence does not imply that either single frame contained the full signature. Malformed advertisements contribute no identity provenance. In scan/detection JSON, `mode: passive-only` describes the observations in that artifact, not the identity of the running firmware or all radio activity during the session. For reproducible research, retain the installed image name and its matching manifest alongside any separate experimental test reports.
 
 JSON strings preserve byte values with `\u00XX` escapes; they are not a UTF-8 interpretation of binary SSIDs. `ssid_hex` is authoritative for original bytes. CSV escapes binary bytes as `\xNN`, quotes fields and protects formula-leading values with an apostrophe. SSID hex remains unchanged. Vendor IEs are summarized by prefix/payload length; enable PCAP if the full received IE bytes are needed.
 

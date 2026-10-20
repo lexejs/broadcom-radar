@@ -1,6 +1,8 @@
 #pragma once
 #include "Parsers.h"
 namespace radar {
+void recordAdvertisementSource(AccessPoint& ap, const Observation& observation);
+uint8_t evidenceFrameSources(const AccessPoint& ap, uint8_t evidence);
 bool matchingAdvertisementContext(const Frame& trigger, const Frame& context);
 class AdvertisementCache {
 public:

@@ -1,6 +1,18 @@
 #include "AccessPointStore.h"
 #include <cstring>
 namespace radar {
+void recordAdvertisementSource(AccessPoint& ap, const Observation& observation) {
+    if (observation.malformed) return;
+    const uint8_t source = observation.subtype == 8 ? 1 : observation.subtype == 5 ? 2 : 0;
+    ap.metadataSources |= source;
+    if (observation.wpsAdvertised) ap.wpsSources |= source;
+    if (source == 1) { ap.beaconEvidence |= observation.evidence; ap.beaconDefaults |= observation.wps.defaults; }
+    if (source == 2) { ap.responseEvidence |= observation.evidence; ap.responseDefaults |= observation.wps.defaults; }
+}
+uint8_t evidenceFrameSources(const AccessPoint& ap, uint8_t evidence) {
+    if (evidence == IdentityDefaults) return (ap.beaconDefaults ? 1 : 0) | (ap.responseDefaults ? 2 : 0);
+    return ((ap.beaconEvidence & evidence) ? 1 : 0) | ((ap.responseEvidence & evidence) ? 2 : 0);
+}
 bool matchingAdvertisementContext(const Frame& trigger, const Frame& context) {
     return trigger.length >= 36 && trigger.length <= kMaxFrame && context.length >= 36 && context.length <= kMaxFrame &&
         (trigger.bytes[0] == 0x80 || trigger.bytes[0] == 0x50) && (context.bytes[0] == 0x80 || context.bytes[0] == 0x50) &&
@@ -78,6 +90,7 @@ const AccessPoint* AccessPointStore::observe(const Observation& obs) {
     if (obs.rssi > ap.maxRssi) ap.maxRssi = obs.rssi;
     if (obs.captureChannel >= 1 && obs.captureChannel <= 14) ap.captureChannels |= 1 << (obs.captureChannel - 1);
     if (obs.malformed) { ++ap.malformedAdvertisements; return &ap; }
+    recordAdvertisementSource(ap, obs);
     const bool firstComplete = ap.completeAdvertisements == 0;
     ++ap.completeAdvertisements;
     ap.info.malformed = false;
