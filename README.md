@@ -6,24 +6,24 @@ Built for **M5Stack Cardputer ADV** and the **original Cardputer** (ESP32-S3), w
 
 > **Authorized use only:** Test networks you own or have explicit permission to assess. Radar helps with security inventory and planning vendor firmware updates. Advertised fingerprints are evidence, not a verdict on vulnerability, patch status or safety.
 
-**Published release 1.0.12** · [MIT license](LICENSE) · [All releases](https://github.com/lexejs/broadcom-radar/releases)
+**Published release 1.0.27** · [MIT license](LICENSE) · [All releases](https://github.com/lexejs/broadcom-radar/releases)
 
-Development source: **1.0.27**, not yet published as a release. The downloads below remain the published 1.0.12 images.
+Latest source and downloads: **1.0.27**. This release adds compact colored badges, more readable network names and fixes for SD export stalls.
 
 [Download](#download-and-choose-a-firmware) · [Get started](#quick-start) · [Read the results](#meaning-of-results) · [Controls](#controls) · [FAQ](#frequently-asked-questions) · [Research](RESEARCH.md)
 
 ## Download and choose a firmware
 
-**Before downloading:** your Cardputer must already run [M5Launcher](https://github.com/bmorcelli/Launcher/wiki/Explaining-the-project). These published images use **Poland (`PL`), channels 1-13**. For another operating country, follow the [country configuration](#radio-and-memory-decisions) before building. An **app slot** is reserved internal flash space for one application; check its actual size in Launcher.
+**Before downloading:** your Cardputer must already run [M5Launcher](https://github.com/bmorcelli/Launcher/wiki/Explaining-the-project). These published images use **Poland (`PL`), channels 1-13**. Choose your actual operating country with **C**; see [country configuration](#radio-and-memory-decisions). The selection resets on restart. An **app slot** is reserved internal flash space for one application; check its actual size in Launcher.
 
 **New here? Choose the passive scanner for your device:**
 
 | Your device | Recommended download | Manifest (size and SHA-256) |
 | --- | --- | --- |
-| **Cardputer ADV** (Stamp-S3A) | [ADV firmware 1.0.12 (.bin)](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.12/BRCM-RDR-1.0.12.bin) | [Size and SHA-256](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.12/BRCM-RDR-1.0.12.bin.json) |
-| **Original Cardputer** (Stamp-S3) | [Original firmware 1.0.12 (.bin)](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.12/BRCM-RDR-S3-1.0.12.bin) | [Size and SHA-256](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.12/BRCM-RDR-S3-1.0.12.bin.json) |
+| **Cardputer ADV** (Stamp-S3A) | [ADV firmware 1.0.27 (.bin)](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.27/BRCM-RDR-1.0.27.bin) | [Size and SHA-256](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.27/BRCM-RDR-1.0.27.bin.json) |
+| **Original Cardputer** (Stamp-S3) | [Original firmware 1.0.27 (.bin)](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.27/BRCM-RDR-S3-1.0.27.bin) | [Size and SHA-256](https://github.com/lexejs/broadcom-radar/releases/download/v1.0.27/BRCM-RDR-S3-1.0.27.bin.json) |
 
-These builds listen to existing Wi-Fi advertisements and do not start active WPS tests. Both builds pass automated checks; on-device operation of 1.0.12 remains unverified on either board. Optional `-T`, `-C` and `-F` research images are explained [below](#experimental-on-device-wps-tests).
+These builds listen to existing Wi-Fi advertisements and do not start active WPS tests. Both builds pass automated checks; on-device operation of 1.0.27 remains unverified on either board. Optional `-T`, `-C` and `-F` research images are explained [below](#experimental-on-device-wps-tests).
 
 ## Screen previews
 
@@ -34,7 +34,7 @@ The network list puts Broadcom observations first. Open a row to see which adver
   <img src="docs/images/detection-evidence.png" width="360" alt="Evidence page showing the three Broadcom signature rules for a synthetic network">
 </p>
 
-*Rendered from the production UI with synthetic example networks. Previews show the development version; published downloads can differ. These are not device photos or evidence of hardware validation.*
+*Rendered from the production UI with synthetic example networks. Previews show version 1.0.27. These are not device photos or evidence of hardware validation.*
 
 <details>
 <summary>More screens: network details, display, alerts and GPS</summary>
@@ -69,21 +69,21 @@ Keep the resident Launcher. Do not flash a bootloader, partition table, merged i
 <details>
 <summary>File verification and detailed installation steps</summary>
 
-On macOS, run `shasum -a 256 BRCM-RDR-1.0.12.bin`; on Linux, use `sha256sum BRCM-RDR-1.0.12.bin`. Compare the output with the manifest shipped with that exact image.
+On macOS, run `shasum -a 256 BRCM-RDR-1.0.27.bin`; on Linux, use `sha256sum BRCM-RDR-1.0.27.bin`. Compare the output with the manifest shipped with that exact image.
 
 
 1. Keep the existing Launcher installed. Before replacing an app, retain its original `.bin`, back up its data using the facilities available in your Launcher version, and preserve `/config.conf` and `/bkp` on the SD card. Keep an off-card copy of important backups. Check the existing boot-to-Launcher/recovery setting before installation.
 2. Open **PMan** or the installed version's partition list. Identify an OTA app slot large enough for the `required_aligned_app_partition_bytes` in the selected `.bin.json`. A Launcher version supporting dynamic partitions can instead create a separate app slot in confirmed free flash space. Preserve the resident Launcher and all other apps and data. The conservative 1.5 MiB build guard is not a measurement of free space on your device.
-3. Copy the matching `.bin` to the microSD card, for example `/firmware/BRCM-RDR-1.0.12.bin`. FAT32 on an MBR SDHC card is a conservative choice; the installed Launcher may also support other formats. Insert the card.
+3. Copy the matching `.bin` to the microSD card, for example `/firmware/BRCM-RDR-1.0.27.bin`. FAT32 on an MBR SDHC card is a conservative choice; the installed Launcher may also support other formats. Insert the card.
 4. Enter Launcher, open **SD**, select the `.bin`, then the install action. Choose the intended compatible app slot, with the understanding that selecting an occupied slot replaces its app. Menu wording varies by Launcher version. Review any proposed new slot against the actual free space; decline removal, resizing or movement of existing partitions, compaction, formatting and filesystem installation. This application needs no data partition. Stop if installation requires changing other apps or their data.
-5. Start the installed app. The initial screen should show `BRCM-RDR 1.0.12`, its build variant, `RUN`, and a changing channel. Reception is passive; wait through several channel sweeps.
+5. Start the installed app. The initial screen should show `BRCM-RDR 1.0.27`, its build variant, `RUN`, and a changing channel. Reception is passive; wait through several channel sweeps.
 
 **Do not flash `bootloader.bin`, `partitions.bin`, a merged image or a full dump. Do not run erase-flash.** `partitions-build-only.csv` exists solely for linking and size checking; it is never part of the installation package. Direct `pio run -t upload` is deliberately disabled to protect Launcher.
 
 If you already have a raw partition-table export or a CSV describing the actual installed table, this read-only check verifies that the image fits an existing OTA slot:
 
 ```sh
-python3 scripts/check_launcher_partition.py dist/BRCM-RDR-1.0.12.bin /path/to/actual-partitions.bin --label app1
+python3 scripts/check_launcher_partition.py dist/BRCM-RDR-1.0.27.bin /path/to/actual-partitions.bin --label app1
 ```
 
 Use the real OTA partition label. This script does not read or write flash, resize partitions or install anything. Without a real table, only image-format and build-limit checks are possible. Current upstream Launcher uses dynamic partitions; an 8 MB flash chip alone does not establish the available app slot size.
@@ -106,7 +106,7 @@ Installation of the ADV `-F` image through Launcher 2.8.0 was confirmed on 20 Oc
 
 The labels describe **what Radar has observed**:
 
-| List badge (development 1.0.27+) | Color | Full status and meaning |
+| List badge | Color | Full status and meaning |
 | --- | --- | --- |
 | **B+W** | Orange | **BRCM+WPS**: a Broadcom signature and WPS advertisement were observed for the same network. Shown first. |
 | **BRC** | Magenta | **BRCM**: a Broadcom signature was observed; WPS has not been observed. |
@@ -114,7 +114,7 @@ The labels describe **what Radar has observed**:
 | **---** | Gray | **NONE**: a complete advertisement was read without a characteristic signature. |
 | **???** | Yellow | **WAIT**: the available advertisement data is incomplete or malformed. |
 
-Details retain the full status names; published 1.0.12 uses them in the list too. Compact badges leave 16 text columns for the network name, up from 11. The selected row keeps its blue background and `>` marker as well as its category color. H, then the next help page, shows the badge legend.
+Details retain the full status names; older 1.0.12 images use them in the list too. Compact badges leave 16 text columns for the network name, up from 11. The selected row keeps its blue background and `>` marker as well as its category color. H, then the next help page, shows the badge legend.
 
 Development 1.0.19 marks contributing frame types on EVIDENCE: **B** is Beacon, **P** is Probe Response and **B+P** means both contributed. The ACTIVITY page separately counts received frame types and identifies valid metadata sources. `WPS:not seen` means no WPS advertisement was observed, not that the router has WPS disabled. Findings accumulate within the session.
 
@@ -270,18 +270,18 @@ Optional `-T`, `-C` and `-F` images can transmit during a **manually confirmed t
 | Transport experiment | `-C` | Scoped driver compatibility; stops at WSC Start |
 | Implementation fingerprint | `-F` | Compatible transport and one empty WPS first fragment; family candidate only |
 
-Local builds generate the same filenames under `dist/`; generated files are excluded from source history. The sizes below record the 1.0.12 development build. Current local artifacts use the development version in the source. Release and CI builds can differ; use the manifest shipped with your exact image.
+Local builds generate the same filenames under `dist/`; generated files are excluded from source history. The sizes below describe the published 1.0.27 assets. Release and CI builds can differ; use the manifest shipped with your exact image.
 
 | Hardware | Application image | Size |
 | --- | --- | --- |
-| Cardputer ADV (Stamp-S3A) | `BRCM-RDR-1.0.12.bin` | 1,012,224 bytes |
-| Original Cardputer (Stamp-S3) | `BRCM-RDR-S3-1.0.12.bin` | 1,012,320 bytes |
-| ADV, stock WPS probe | `BRCM-RDR-T-1.0.12.bin` | 1,035,424 bytes |
-| Original, stock WPS probe | `BRCM-RDR-S3-T-1.0.12.bin` | 1,035,536 bytes |
-| ADV, transport-only compatibility | `BRCM-RDR-C-1.0.12.bin` | 1,036,176 bytes |
-| Original, transport-only compatibility | `BRCM-RDR-S3-C-1.0.12.bin` | 1,036,272 bytes |
-| ADV, compatible WPS fingerprint | `BRCM-RDR-F-1.0.12.bin` | 1,036,176 bytes |
-| Original, compatible WPS fingerprint | `BRCM-RDR-S3-F-1.0.12.bin` | 1,036,272 bytes |
+| Cardputer ADV (Stamp-S3A) | `BRCM-RDR-1.0.27.bin` | 1,023,584 bytes |
+| Original Cardputer (Stamp-S3) | `BRCM-RDR-S3-1.0.27.bin` | 1,023,504 bytes |
+| ADV, stock WPS probe | `BRCM-RDR-T-1.0.27.bin` | 1,038,288 bytes |
+| Original, stock WPS probe | `BRCM-RDR-S3-T-1.0.27.bin` | 1,038,192 bytes |
+| ADV, transport-only compatibility | `BRCM-RDR-C-1.0.27.bin` | 1,039,088 bytes |
+| Original, transport-only compatibility | `BRCM-RDR-S3-C-1.0.27.bin` | 1,039,040 bytes |
+| ADV, compatible WPS fingerprint | `BRCM-RDR-F-1.0.27.bin` | 1,039,104 bytes |
+| Original, compatible WPS fingerprint | `BRCM-RDR-S3-F-1.0.27.bin` | 1,039,040 bytes |
 
 Filenames include the firmware version from `include/RadarTypes.h`. The adjacent `.bin.json` files contain exact sizes, SHA-256 hashes and required app partition sizes rounded to 64 KiB. These are **application-only** ESP32-S3 images, starting with `0xE9`. They contain no bootloader, partition table, filesystem image or configuration. Use the binary for your hardware: the ADV build explicitly selects the TCA8418 keyboard reader; the original selects the GPIO matrix reader.
 
@@ -310,8 +310,8 @@ The 1.0.6 device traces demonstrate successful AUTH/ASSOC/EAP/WSC entry and subs
 
 [RESEARCH.md](RESEARCH.md) documents the original sources, exact signature bytes and limits of the implementation.
 
-- **Automated checks:** host tests and all eight firmware builds passed for 1.0.12 in [GitHub CI](https://github.com/lexejs/broadcom-radar/actions/runs/39410391039).
-- **ADV installation:** Launcher confirmed a separate 1 MiB app slot with existing partitions preserved. Startup and display behavior of that installed 1.0.12 image were not checked.
+- **Automated checks:** local host tests and all eight firmware builds passed for 1.0.27. [GitHub CI](https://github.com/lexejs/broadcom-radar/actions/workflows/ci.yml) runs the same checks on published source.
+- **ADV device feedback:** the operator reported SD-related freezes resolved in 1.0.25. The newer 1.0.26 audio fix and 1.0.27 colored list have host checks; their device behavior has not yet been confirmed. Earlier 1.0.12 installation preserved existing partitions.
 - **Still to validate on hardware:** original Cardputer operation, independent RF behavior, rollback and long-duration stability.
 
 <details>
@@ -319,7 +319,8 @@ The 1.0.6 device traces demonstrate successful AUTH/ASSOC/EAP/WSC entry and subs
 
 | Validation | Status |
 | --- | --- |
-| Eight firmware builds, host tests with ASan/UBSan and independent report/PCAP decoding | Passed on the development computer; protocol replies are simulated |
+| 1.0.27: eight firmware builds, host tests with ASan/UBSan and independent report/PCAP decoding | Passed locally: 97,351 primary assertions including 50,000 deterministic damaged inputs, 2,763 WPS checks, 96 GPS assertions, 1,962 audio assertions per board, 59 transport and 209 fingerprint assertions. Protocol replies and peripherals are simulated |
+| Cardputer ADV 1.0.25 SD freeze feedback | Operator reported that freezes stopped with the same microSD card. This is not a long-duration or all-card validation |
 | Cardputer ADV 1.0.12 installation | Launcher confirmed installation into a separate 1 MiB app slot with existing partitions preserved; application startup and display behavior were not checked |
 | Cardputer ADV 1.0.7 fingerprint reports | Eleven distinct attempts: four Fragment ACK candidates, one EAP Failure candidate, six timeouts; all restored capture and observed subsequent ads. Implementation-family labels remain uncalibrated |
 | Original Cardputer, detailed keyboard/battery checks, independent radio measurement, recovery and long-running stability | Still require hardware acceptance checks |
@@ -343,7 +344,7 @@ All eight development images require an OTA app slot of at least **1,048,576 byt
 ### Physical acceptance checks still required
 
 
-Install through the existing Launcher while preserving other apps and data; confirm return to Launcher and restore of the prior app. On both hardware variants check keyboard navigation, SD present/absent, fixed channel and hopping, duplicate SSIDs, report export and several hours of uptime/minimum-heap telemetry. With a separate monitor-mode receiver verify that the Cardputer sends no Probe Request, authentication, association, EAP/WPS, deauthentication or other Wi-Fi traffic while a default passive build runs. Controlled advertisement fixtures or comparison against an independently captured Beacon trace are needed to validate RSSI/channel/FCS behavior on the actual device. These checks remain pending beyond the user-reported ADV basic operation, earlier display check and separately confirmed 1.0.12 installation.
+Install through the existing Launcher while preserving other apps and data; confirm return to Launcher and restore of the prior app. On both hardware variants check keyboard navigation, SD present/absent, fixed channel and hopping, duplicate SSIDs, report export and several hours of uptime/minimum-heap telemetry. With a separate monitor-mode receiver verify that the Cardputer sends no Probe Request, authentication, association, EAP/WPS, deauthentication or other Wi-Fi traffic while a default passive build runs. Controlled advertisement fixtures or comparison against an independently captured Beacon trace are needed to validate RSSI/channel/FCS behavior on the actual device. These checks remain pending beyond the user-reported ADV basic operation, earlier display check, confirmed 1.0.12 installation and limited 1.0.25 SD freeze feedback.
 
 </details>
 
