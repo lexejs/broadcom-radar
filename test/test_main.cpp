@@ -398,9 +398,9 @@ void uiTests() {
     tick(); CHECK(scanner.stats().running);
     CHECK(M5Cardputer.Display.directClears==0);
     CHECK(M5Cardputer.Display.lines.size()==9);
-    CHECK(M5Cardputer.Display.lines[3].find("BRCM")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find("B+W")!=std::string::npos);
     CHECK(M5Cardputer.Display.lines[3].find("-58")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find(">B+W")!=std::string::npos);
     CHECK(M5Cardputer.Display.lines[3].size()<=26);
     CHECK(M5Cardputer.Display.backgrounds[3]==TFT_NAVY);
     CHECK(M5Cardputer.Display.lines[7].empty());
@@ -418,7 +418,7 @@ void uiTests() {
     M5Cardputer.Keyboard.event("");M5Cardputer.Keyboard.state.enter=true;tick();
     CHECK(M5Cardputer.Display.lines[0].find("1/7 SUMMARY")!=std::string::npos);
     M5Cardputer.Keyboard.event("");M5Cardputer.Keyboard.state.right=true;tick();
-    CHECK(M5Cardputer.Display.lines[2].find("Observed:")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[2]=="Observed: BRCM+WPS");
     for(unsigned page=2;page<7;++page) {
         key("/"); CHECK(M5Cardputer.Display.lines[0].find(std::to_string(page+1)+"/7")!=std::string::npos);
     }
@@ -440,9 +440,11 @@ void uiTests() {
     for(unsigned i=1;i<=6;++i) store.observe(parse(beacon(text("Network-"+std::to_string(i)),i)));
     key("."); key("."); key("."); key("."); key(".");
     CHECK(M5Cardputer.Display.lines[3].find("Network-2")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[7].find(">NONE     Network-6")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[7].find(">--- Network-6")!=std::string::npos);
     store.clear();
     store.observe(parse(beacon(text("ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"))));
+    M5Cardputer.Keyboard.event(""); tick(); tick();
+    CHECK(M5Cardputer.Display.lines[3].find("ABCDEFGHIJKLM...")!=std::string::npos);
     M5Cardputer.Keyboard.event(""); M5Cardputer.Keyboard.state.enter=true; tick();
     CHECK(M5Cardputer.Display.lines[1]=="ABCDEFGHIJKLMNOPQRSTUVWXYZ");
     CHECK(M5Cardputer.Display.lines[2]=="123456");
@@ -497,13 +499,19 @@ void uiSortingTests() {
     auto key=[&](const char* text) { M5Cardputer.Keyboard.event(text);tick(); };
     auto enter=[&]() { M5Cardputer.Keyboard.event("");M5Cardputer.Keyboard.state.enter=true;tick(); };
     M5Cardputer.Keyboard.event(""); M5Cardputer.Keyboard.changed=false; tick();
-    CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS Broadcom-A")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[4].find("BRCM     Broadcom-B")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[5].find("WPS      With-WPS")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[6].find("NONE     Plain ")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[7].find("NONE     Plain-2")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find(">B+W Broadcom-A")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[4].find("BRC Broadcom-B")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[5].find("WPS With-WPS")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[6].find("--- Plain ")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[7].find("--- Plain-2")!=std::string::npos);
+    CHECK(M5Cardputer.Display.foregrounds[3]==TFT_ORANGE);
+    CHECK(M5Cardputer.Display.foregrounds[4]==TFT_MAGENTA);
+    CHECK(M5Cardputer.Display.foregrounds[5]==TFT_CYAN);
+    CHECK(M5Cardputer.Display.foregrounds[6]==TFT_DARKGREY);
+    CHECK(M5Cardputer.Display.backgrounds[3]==TFT_NAVY && M5Cardputer.Display.backgrounds[4]==TFT_BLACK);
     for(unsigned i=0;i<5;++i) key(".");
-    CHECK(M5Cardputer.Display.lines[7].find(">WAIT     Waiting")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[7].find(">??? Waiting")!=std::string::npos);
+    CHECK(M5Cardputer.Display.foregrounds[7]==TFT_YELLOW && M5Cardputer.Display.backgrounds[7]==TFT_NAVY);
     enter(); CHECK(M5Cardputer.Display.lines[1]=="Waiting");
     key("`"); for(unsigned i=0;i<4;++i) key(";");
     enter(); CHECK(M5Cardputer.Display.lines[1]=="Broadcom-B");
@@ -511,28 +519,28 @@ void uiSortingTests() {
     auto promoted=beacon(text("Plain"),2); proprietary(promoted); wps(promoted,identity); store.observe(parse(promoted)); tick();
     CHECK(M5Cardputer.Display.lines[1]=="Broadcom-B");
     key("`");
-    CHECK(M5Cardputer.Display.lines[3].find("BRCM+WPS Plain ")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[5].find(">BRCM     Broadcom-B")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find("B+W Plain ")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[5].find(">BRC Broadcom-B")!=std::string::npos);
     key(".");
     auto completed=beacon(text("Waiting"),1); proprietary(completed); wps(completed,identity); store.observe(parse(completed)); tick();
-    CHECK(M5Cardputer.Display.lines[3].find("BRCM+WPS Waiting")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[7].find(">WPS      With-WPS")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find("B+W Waiting")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[7].find(">WPS With-WPS")!=std::string::npos);
     enter(); CHECK(M5Cardputer.Display.lines[1]=="With-WPS");
     key("r"); key("r"); CHECK(store.size()==0);
     store.observe(parse(beacon(text("Plain"),2))); store.observe(parse(first)); tick();
-    CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS Broadcom-A")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find(">B+W Broadcom-A")!=std::string::npos);
     CHECK(M5Cardputer.Display.boundsOk);
     auto strong=beacon(text("Strong"),7); proprietary(strong); wps(strong,identity);
     auto stronger=parse(strong); stronger.rssi=-20; store.observe(stronger); tick();
-    CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS Broadcom-A")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find(">B+W Broadcom-A")!=std::string::npos);
     key("o"); CHECK(M5Cardputer.Display.lines[0].find("RSSI")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[3].find("BRCM+WPS Strong")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[4].find(">BRCM+WPS Broadcom-A")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find("B+W Strong")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[4].find(">B+W Broadcom-A")!=std::string::npos);
     enter(); CHECK(M5Cardputer.Display.lines[1]=="Broadcom-A"); key("`");
     auto moved=parse(first); moved.rssi=-10; store.observe(moved); tick();
-    CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS Broadcom-A")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find(">B+W Broadcom-A")!=std::string::npos);
     key("o"); CHECK(M5Cardputer.Display.lines[0].find("RSSI")==std::string::npos);
-    CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS Broadcom-A")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find(">B+W Broadcom-A")!=std::string::npos);
 }
 void uiFilterTests() {
     mock::files.clear(); mock::sdPresent=true;
@@ -556,19 +564,19 @@ void uiFilterTests() {
     key("f");
     CHECK(M5Cardputer.Display.lines[8].find("F:WPS")!=std::string::npos);
     CHECK(M5Cardputer.Display.lines[2].find("AP:2/7")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS Combined")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find(">B+W Combined")!=std::string::npos);
     CHECK(M5Cardputer.Display.lines[4].find("WPS-only")!=std::string::npos);
     CHECK(M5Cardputer.Display.lines[5].empty());
     key("."); key("."); enter(); CHECK(M5Cardputer.Display.lines[1]=="WPS-only");
     key("F"); // A selected AP excluded by the next filter falls back to its first match.
     CHECK(M5Cardputer.Display.lines[8].find("F:B+W")!=std::string::npos);
     CHECK(M5Cardputer.Display.lines[2].find("AP:1/7")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[3].find(">BRCM+WPS Combined")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[3].find(">B+W Combined")!=std::string::npos);
     // New WPS evidence promotes a previously hidden candidate without retargeting selection.
     wps(broadcom,identity); store.observe(parse(broadcom)); tick();
     CHECK(M5Cardputer.Display.lines[2].find("AP:2/7")!=std::string::npos);
     CHECK(M5Cardputer.Display.lines[3].find("BRCM-only")!=std::string::npos);
-    CHECK(M5Cardputer.Display.lines[4].find(">BRCM+WPS Combined")!=std::string::npos);
+    CHECK(M5Cardputer.Display.lines[4].find(">B+W Combined")!=std::string::npos);
     enter(); CHECK(M5Cardputer.Display.lines[1]=="Combined"); key("f");
     CHECK(M5Cardputer.Display.lines[8].find("F:ALL")!=std::string::npos);
     CHECK(M5Cardputer.Display.lines[2].find("AP:7/7")!=std::string::npos);
@@ -585,7 +593,7 @@ void uiFilterTests() {
     const auto& bytes=mock::files.at("/broadcom-radar/scan-001.json");
     CHECK(std::string(bytes.begin(),bytes.end()).find("Plain")!=std::string::npos);
     mock::nowUs+=5000000; tick(); CHECK(M5Cardputer.Display.lines[8].find("F:B+W")!=std::string::npos);
-    key("f"); CHECK(M5Cardputer.Display.lines[3].find(">NONE     Plain")!=std::string::npos);
+    key("f"); CHECK(M5Cardputer.Display.lines[3].find(">--- Plain")!=std::string::npos);
     CHECK(M5Cardputer.Display.boundsOk);
 }
 void uiStateTests() {
@@ -623,7 +631,7 @@ void uiStateTests() {
     key("/"); key("/"); CHECK(M5Cardputer.Display.lines[0]=="3/7 IDENTITY");
     key("."); CHECK(M5Cardputer.Display.backgrounds[2]==TFT_NAVY);
     key("h"); secondary(); key("/"); CHECK(M5Cardputer.Display.lines[0]=="HELP 2/5");
-    CHECK(M5Cardputer.Display.lines[2]=="WPS: test-ready APs");
+    CHECK(M5Cardputer.Display.lines[2]=="B+W: Broadcom + WPS");
     key("`"); CHECK(M5Cardputer.Display.lines[0]=="3/7 IDENTITY");
     CHECK(M5Cardputer.Display.backgrounds[2]==TFT_NAVY);
     key("v"); CHECK(M5Cardputer.Display.lines[0]=="Manufacturer 1/2"); secondary();

@@ -1,11 +1,11 @@
 {
-  "firmware": "1.0.21",
+  "firmware": "1.0.27",
   "screens": [
     {
       "file": "network-list.png",
       "rows": [
         {
-          "text": "BRCM-RDR 1.0.21 P ALL",
+          "text": "BRCM-RDR 1.0.27 P ALL",
           "foreground": 1,
           "background": 3
         },
@@ -20,28 +20,28 @@
           "background": 0
         },
         {
-          "text": ">BRCM+WPS Demo BRCM    -43",
+          "text": ">B+W Demo BRCM         -43",
           "foreground": 2,
           "background": 3
         },
         {
-          "text": " BRCM     Demo Radio   -57",
-          "foreground": 2,
+          "text": " BRC Demo Radio        -57",
+          "foreground": 5,
           "background": 0
         },
         {
-          "text": " WPS      Demo WPS     -62",
-          "foreground": 1,
+          "text": " WPS Demo WPS          -62",
+          "foreground": 4,
           "background": 0
         },
         {
-          "text": " NONE     Demo Guest   -71",
-          "foreground": 1,
+          "text": " --- Demo Guest        -71",
+          "foreground": 6,
           "background": 0
         },
         {
-          "text": " WAIT     Demo Pen...  -80",
-          "foreground": 1,
+          "text": " ??? Demo Pending      -80",
+          "foreground": 7,
           "background": 0
         },
         {

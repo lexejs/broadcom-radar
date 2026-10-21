@@ -10,6 +10,10 @@ constexpr uint16_t kIdleSeconds[] = {0, 30, 60, 120, 300};
 constexpr int kRowHeight = 15;
 constexpr size_t kVisibleNetworks = 5, kColumns = 26;
 constexpr const char* kDetectionBadges[] = {"BRCM+WPS", "BRCM", "WPS", "NONE", "WAIT"};
+struct ListStyle { const char* badge; uint16_t color; };
+constexpr ListStyle kListStyles[] = {{"B+W", TFT_ORANGE}, {"BRC", TFT_MAGENTA}, {"WPS", TFT_CYAN},
+                                    {"---", TFT_DARKGREY}, {"???", TFT_YELLOW}};
+constexpr size_t kListNameColumns = 16;
 constexpr const char* kPageNames[] = {"SUMMARY", "EVIDENCE", "IDENTITY", "UUID", "ACTIVITY", "VENDOR IEs 1/2", "VENDOR IEs 2/2"};
 size_t detectionGroup(const AccessPoint& ap) {
     switch (classify(ap)) {
@@ -260,10 +264,10 @@ void DisplayUi::help(const ScanStats& s, const PcapRing& ring) {
         line(5, "F: filter S: pause/resume"); line(6, "M:CH C:country P:PCAP");
         line(7, "O:sort N:alerts G:GPS");
     } else if (helpPage_ == 1) {
-        line(1, "ALL: all stored networks"); line(2, "WPS: test-ready APs");
-        line(3, "B+W: BRCM + test-ready"); line(4, "B/P: Beacon/Probe Response");
-        line(5, "NONE: no signature seen"); line(6, "WAIT: incomplete AP data");
-        line(7, "Hidden rows stay in export");
+        line(1, "F: ALL/WPS/B+W filters"); line(2, "B+W: Broadcom + WPS");
+        line(3, "BRC: Broadcom signature"); line(4, "WPS: WPS, no BRCM seen");
+        line(5, "---: no signature seen"); line(6, "???: incomplete AP data");
+        line(7, "B/P: Beacon/Probe Response");
     } else if (helpPage_ == 2) {
         line(1, "E: export all stored APs"); line(2, "J/C/P: JSON / CSV / PCAP");
         line(3, "/broadcom-radar/"); line(4, "BRCM auto-saves with PCAP");
@@ -442,12 +446,13 @@ void DisplayUi::draw(const AccessPointStore& store, const ScanStats& s, const Ex
         if (!store.size()) line(4, s.running ? "Listening for networks..." : "Scan paused; no networks");
         else if (!orderedCount_) { line(4, "No matching networks"); line(5, "F: change filter"); }
         for (size_t i = top; i < orderedCount_ && i < top + kVisibleNetworks; ++i) {
-            const auto& ap = store.at(ordered_[i]); char rendered[129], name[12]; const char* ssid = ssidText(ap.info, rendered, sizeof(rendered));
-            const size_t length = segmentLength(ssid, std::strlen(ssid) > 11 ? 8 : 11);
+            const auto& ap = store.at(ordered_[i]); char rendered[129], name[kListNameColumns + 1]; const char* ssid = ssidText(ap.info, rendered, sizeof(rendered));
+            const size_t length = segmentLength(ssid, std::strlen(ssid) > kListNameColumns ? kListNameColumns - 3 : kListNameColumns);
             std::snprintf(name, sizeof(name), "%.*s%s", int(length), ssid, ssid[length] ? "..." : "");
-            foreground_ = classify(ap) == Classification::BroadcomSignature ? TFT_ORANGE : TFT_WHITE;
+            const auto& style = kListStyles[detectionGroup(ap)];
+            foreground_ = style.color;
             background_ = i == selected_ ? TFT_NAVY : TFT_BLACK;
-            line(3 + i - top, "%c%-8s %-11s %4d", i == selected_ ? '>' : ' ', kDetectionBadges[detectionGroup(ap)], name, ap.info.rssi);
+            line(3 + i - top, "%c%-3s %-16s %4d", i == selected_ ? '>' : ' ', style.badge, name, ap.info.rssi);
         }
         foreground_ = TFT_CYAN; background_ = TFT_BLACK;
         if (ex.busy()) line(8, "%s", ex.message());

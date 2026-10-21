@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 constexpr int TFT_BLACK=0, TFT_WHITE=1, TFT_ORANGE=2, TFT_NAVY=3, TFT_CYAN=4;
+constexpr int TFT_MAGENTA=5, TFT_DARKGREY=6, TFT_YELLOW=7;
 inline uint32_t millis() { return mock::nowUs/1000; }
 struct FakeDisplay {
     std::vector<std::string> lines;

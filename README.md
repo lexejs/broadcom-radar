@@ -8,7 +8,7 @@ Built for **M5Stack Cardputer ADV** and the **original Cardputer** (ESP32-S3), w
 
 **Published release 1.0.12** · [MIT license](LICENSE) · [All releases](https://github.com/lexejs/broadcom-radar/releases)
 
-Development source: **1.0.26**, not yet published as a release. The downloads below remain the published 1.0.12 images.
+Development source: **1.0.27**, not yet published as a release. The downloads below remain the published 1.0.12 images.
 
 [Download](#download-and-choose-a-firmware) · [Get started](#quick-start) · [Read the results](#meaning-of-results) · [Controls](#controls) · [FAQ](#frequently-asked-questions) · [Research](RESEARCH.md)
 
@@ -30,7 +30,7 @@ These builds listen to existing Wi-Fi advertisements and do not start active WPS
 The network list puts Broadcom observations first. Open a row to see which advertised fields produced the result.
 
 <p>
-  <img src="docs/images/network-list.png" width="360" alt="Network list showing synthetic BRCM+WPS, BRCM, WPS, NONE and WAIT examples">
+  <img src="docs/images/network-list.png" width="360" alt="Network list with compact B+W, BRC, WPS, --- and ??? badges in five distinct colors">
   <img src="docs/images/detection-evidence.png" width="360" alt="Evidence page showing the three Broadcom signature rules for a synthetic network">
 </p>
 
@@ -106,13 +106,15 @@ Installation of the ADV `-F` image through Launcher 2.8.0 was confirmed on 20 Oc
 
 The labels describe **what Radar has observed**:
 
-| On screen | What it means |
-| --- | --- |
-| **BRCM+WPS** | A Broadcom signature and WPS advertisement were observed for the same network. Shown first. |
-| **BRCM** | A Broadcom signature was observed; WPS has not been observed. |
-| **WPS** | WPS was observed without a Broadcom signature. |
-| **NONE** | A complete advertisement was read without a characteristic signature. |
-| **WAIT** | The available advertisement data is incomplete or malformed. |
+| List badge (development 1.0.27+) | Color | Full status and meaning |
+| --- | --- | --- |
+| **B+W** | Orange | **BRCM+WPS**: a Broadcom signature and WPS advertisement were observed for the same network. Shown first. |
+| **BRC** | Magenta | **BRCM**: a Broadcom signature was observed; WPS has not been observed. |
+| **WPS** | Cyan | WPS was observed without a Broadcom signature. |
+| **---** | Gray | **NONE**: a complete advertisement was read without a characteristic signature. |
+| **???** | Yellow | **WAIT**: the available advertisement data is incomplete or malformed. |
+
+Details retain the full status names; published 1.0.12 uses them in the list too. Compact badges leave 16 text columns for the network name, up from 11. The selected row keeps its blue background and `>` marker as well as its category color. H, then the next help page, shows the badge legend.
 
 Development 1.0.19 marks contributing frame types on EVIDENCE: **B** is Beacon, **P** is Probe Response and **B+P** means both contributed. The ACTIVITY page separately counts received frame types and identifies valid metadata sources. `WPS:not seen` means no WPS advertisement was observed, not that the router has WPS disabled. Findings accumulate within the session.
 
@@ -163,7 +165,7 @@ The first key after screen-off only wakes the display. Scanning, channel hopping
 
 On the compact keyboard, the arrow positions are **`;` up, `.` down, `,` left, `/` right**. These work directly or through the Fn arrow mapping. **Fn + backtick** is Escape; plain backtick and Backspace also return. Letter commands accept either case. Changes to scan state, filters, results and PCAP buffering are disabled during export; navigation remains available.
 
-The main screen shows firmware version, build variant (`P` passive, `T` stock test, `C` transport, `F` fingerprint), active filter, running state, channel mode, battery estimate, selection position, visible/stored AP count, Broadcom count and SD availability. A full 128-entry store displays `FULL`; scan diagnostics distinguish rejected new-AP advertisements from RX queue drops. Text remains 50% larger (9x12 cells), with five visible APs and explicit BRCM+WPS/BRCM/WPS/NONE/WAIT badges. Groups initially retain discovery order. Development 1.0.15 adds **O** to sort strongest current RSSI first within each group, with discovery order as the tie-breaker. The `RSSI` header marks this mode. The selected AP is preserved as signal values and groups change; scan-driven redraws remain limited to twice per second. Sorting does not change classification, filters or exports. List rows show numeric RSSI in dBm. Long names and values have a visible `...` marker rather than silent clipping.
+The main screen shows firmware version, build variant (`P` passive, `T` stock test, `C` transport, `F` fingerprint), active filter, running state, channel mode, battery estimate, selection position, visible/stored AP count, Broadcom count and SD availability. A full 128-entry store displays `FULL`; scan diagnostics distinguish rejected new-AP advertisements from RX queue drops. Text remains 50% larger (9x12 cells), with five visible APs. Development 1.0.27 uses compact B+W/BRC/WPS/---/??? badges and a separate text color for each group. Groups initially retain discovery order. Development 1.0.15 adds **O** to sort strongest current RSSI first within each group, with discovery order as the tie-breaker. The `RSSI` header marks this mode. The selected AP is preserved as signal values and groups change; scan-driven redraws remain limited to twice per second. Sorting does not change classification, filters or exports. List rows show numeric RSSI in dBm. Long names and values have a visible `...` marker rather than silent clipping.
 
 Only the main screen has a bottom keyboard-hint row. The seven named detail pages are SUMMARY, EVIDENCE, IDENTITY, UUID, ACTIVITY and two VENDOR IEs pages. The overview wraps SSIDs onto two rows; **V** opens a snapshot of the full selected bounded text, including escaped binary values. Up/Down select fields on SUMMARY and IDENTITY. Manual text paging keeps complete `\xNN` tokens together. Display shortening is distinct from source truncation, which the text viewer labels `source limited`. The remaining bottom rows contain data or status, with no keyboard footer.
 

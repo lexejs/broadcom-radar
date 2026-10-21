@@ -17,7 +17,8 @@ import zlib
 ROOT = Path(__file__).resolve().parent.parent
 FONT_ROOT = ROOT / '.pio/libdeps/cardputer_adv/M5GFX'
 FONT_SOURCE = FONT_ROOT / 'src/lgfx/Fonts/glcdfont.h'
-COLORS = ((0, 0, 0), (255, 255, 255), (255, 182, 0), (0, 0, 123), (0, 255, 255))
+COLORS = ((0, 0, 0), (255, 255, 255), (255, 182, 0), (0, 0, 123), (0, 255, 255),
+          (255, 0, 255), (123, 125, 123), (255, 255, 0))
 
 
 def png(path, pixels, width, height):
